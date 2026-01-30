@@ -7,7 +7,15 @@ import (
 	"cursy_back/routes"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
+
+func init() {
+	// Load .env file if it exists (optional, won't fail if missing)
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using environment variables")
+	}
+}
 
 func main() {
 	// Connect to MongoDB

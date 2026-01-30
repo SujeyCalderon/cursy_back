@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -11,16 +12,19 @@ import (
 
 var DB *mongo.Database
 
-const (
-	DatabaseName = "cursy_db"
-	MongoURI     = "mongodb+srv://calderonmartinezsujey_db_user:3llCkOyW3E9F6ysN@cursy.4gfq57d.mongodb.net/"
-)
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
 func ConnectDB() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	clientOptions := options.Client().ApplyURI(MongoURI)
+	mongoURI := getEnv("MONGO_URI", "mongodb://localhost:27017")
+	clientOptions := options.Client().ApplyURI(mongoURI)
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
 		log.Fatal("Error connecting to MongoDB: ", err)
@@ -32,7 +36,8 @@ func ConnectDB() {
 		log.Fatal("Error pinging MongoDB: ", err)
 	}
 
-	DB = client.Database(DatabaseName)
+	dbName := getEnv("DB_NAME", "cursy_db")
+	DB = client.Database(dbName)
 	log.Println("Connected to MongoDB successfully!")
 }
 
