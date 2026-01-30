@@ -39,20 +39,20 @@ func SetupRoutes(router *gin.Engine) {
 		{
 			// Create course (doesn't require published course)
 			courses.POST("", controllers.CreateCourse)
-			
+
 			// Get feed (doesn't require published course - just shows the cards)
 			courses.GET("", controllers.GetFeed)
-			
+
 			// Course detail - REQUIRES published course (trueque logic)
 			courses.GET("/:id", middleware.RequirePublishedCourse(), controllers.GetCourseDetail)
-			
+
 			// Update and delete own courses
 			courses.PUT("/:id", controllers.UpdateCourse)
 			courses.DELETE("/:id", controllers.DeleteCourse)
-			
+
 			// Publish course
 			courses.PUT("/:id/publish", controllers.PublishCourse)
-			
+
 			// Save/unsave course to library - REQUIRES published course
 			courses.POST("/:id/save", middleware.RequirePublishedCourse(), controllers.SaveCourse)
 			courses.DELETE("/:id/save", controllers.UnsaveCourse)
@@ -66,6 +66,13 @@ func SetupRoutes(router *gin.Engine) {
 			profile.PUT("", controllers.UpdateProfile)
 			profile.GET("/courses", controllers.GetMyCourses)
 			profile.GET("/saved", controllers.GetSavedCourses)
+		}
+
+		// Upload routes (protected)
+		upload := api.Group("/upload")
+		upload.Use(middleware.JWTAuth())
+		{
+			upload.POST("", controllers.UploadImage)
 		}
 	}
 }

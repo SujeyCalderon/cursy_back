@@ -41,3 +41,6 @@ logs/
 # Temporary files
 tmp/
 temp/
+
+# Kotlin config file (has test credentials)
+kotlin_api_config.kt
