@@ -1,0 +1,430 @@
+package controllers
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"cursy_back/config"
+	"cursy_back/models"
+
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+// CreateCourse creates a new course as draft
+func CreateCourse(c *gin.Context) {
+	var input models.CourseCreateInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userIDStr, _ := c.Get("userID")
+	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Set order for blocks if not provided
+	for i := range input.Blocks {
+		if input.Blocks[i].Order == 0 {
+			input.Blocks[i].Order = i + 1
+		}
+	}
+
+	course := models.Course{
+		ID:          primitive.NewObjectID(),
+		AuthorID:    userID,
+		Title:       input.Title,
+		Description: input.Description,
+		CoverImage:  input.CoverImage,
+		Status:      models.CourseStatusDraft,
+		Blocks:      input.Blocks,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	collection := config.GetCollection("courses")
+	_, err = collection.InsertOne(ctx, course)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating course"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Course created as draft",
+		"course":  course,
+	})
+}
+
+// UpdateCourse updates an existing course
+func UpdateCourse(c *gin.Context) {
+	courseIDStr := c.Param("id")
+	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	userIDStr, _ := c.Get("userID")
+	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	var input models.CourseUpdateInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	collection := config.GetCollection("courses")
+
+	// Check if course exists and belongs to user
+	var course models.Course
+	err = collection.FindOne(ctx, bson.M{"_id": courseID, "author_id": userID}).Decode(&course)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found or you don't have permission to edit it"})
+		return
+	}
+
+	// Build update document
+	update := bson.M{"updated_at": time.Now()}
+	if input.Title != "" {
+		update["title"] = input.Title
+	}
+	if input.Description != "" {
+		update["description"] = input.Description
+	}
+	if input.CoverImage != "" {
+		update["cover_image"] = input.CoverImage
+	}
+	if input.Blocks != nil {
+		// Set order for blocks
+		for i := range input.Blocks {
+			if input.Blocks[i].Order == 0 {
+				input.Blocks[i].Order = i + 1
+			}
+		}
+		update["blocks"] = input.Blocks
+	}
+
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": courseID}, bson.M{"$set": update})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating course"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Course updated successfully",
+	})
+}
+
+// PublishCourse publishes a draft course
+func PublishCourse(c *gin.Context) {
+	courseIDStr := c.Param("id")
+	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	userIDStr, _ := c.Get("userID")
+	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	coursesCollection := config.GetCollection("courses")
+
+	// Check if course exists and belongs to user
+	var course models.Course
+	err = coursesCollection.FindOne(ctx, bson.M{"_id": courseID, "author_id": userID}).Decode(&course)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found or you don't have permission to publish it"})
+		return
+	}
+
+	// Validate course has content
+	if course.Title == "" || len(course.Blocks) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Course must have a title and at least one content block"})
+		return
+	}
+
+	// Update course status to published
+	_, err = coursesCollection.UpdateOne(ctx, bson.M{"_id": courseID}, bson.M{
+		"$set": bson.M{
+			"status":     models.CourseStatusPublished,
+			"updated_at": time.Now(),
+		},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error publishing course"})
+		return
+	}
+
+	// Update user's HasPublishedCourse to true
+	usersCollection := config.GetCollection("users")
+	_, err = usersCollection.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{
+		"$set": bson.M{
+			"has_published_course": true,
+			"updated_at":           time.Now(),
+		},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating user status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Course published successfully! You can now access other users' courses.",
+	})
+}
+
+// DeleteCourse deletes a course
+func DeleteCourse(c *gin.Context) {
+	courseIDStr := c.Param("id")
+	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	userIDStr, _ := c.Get("userID")
+	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	collection := config.GetCollection("courses")
+
+	// Check if course exists and belongs to user
+	result, err := collection.DeleteOne(ctx, bson.M{"_id": courseID, "author_id": userID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting course"})
+		return
+	}
+
+	if result.DeletedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found or you don't have permission to delete it"})
+		return
+	}
+
+	// Also remove from saved courses
+	savedCoursesCollection := config.GetCollection("saved_courses")
+	_, _ = savedCoursesCollection.DeleteMany(ctx, bson.M{"course_id": courseID})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Course deleted successfully",
+	})
+}
+
+// GetFeed returns all published courses
+func GetFeed(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	collection := config.GetCollection("courses")
+
+	// Find all published courses
+	findOptions := options.Find().SetSort(bson.D{{"created_at", -1}})
+	cursor, err := collection.Find(ctx, bson.M{"status": models.CourseStatusPublished}, findOptions)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching courses"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var courses []models.Course
+	if err = cursor.All(ctx, &courses); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decoding courses"})
+		return
+	}
+
+	// Get author info for each course
+	usersCollection := config.GetCollection("users")
+	var coursesWithAuthors []models.CourseResponse
+	for _, course := range courses {
+		var author models.User
+		err := usersCollection.FindOne(ctx, bson.M{"_id": course.AuthorID}).Decode(&author)
+		
+		courseResponse := models.CourseResponse{
+			Course:      course,
+			AuthorName:  "",
+			AuthorImage: "",
+		}
+		
+		if err == nil {
+			courseResponse.AuthorName = author.Name
+			courseResponse.AuthorImage = author.ProfileImage
+		}
+		
+		coursesWithAuthors = append(coursesWithAuthors, courseResponse)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"courses": coursesWithAuthors,
+		"count":   len(coursesWithAuthors),
+	})
+}
+
+// GetCourseDetail returns a single course with full details
+func GetCourseDetail(c *gin.Context) {
+	courseIDStr := c.Param("id")
+	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	collection := config.GetCollection("courses")
+
+	var course models.Course
+	err = collection.FindOne(ctx, bson.M{"_id": courseID, "status": models.CourseStatusPublished}).Decode(&course)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+
+	// Get author info
+	usersCollection := config.GetCollection("users")
+	var author models.User
+	usersCollection.FindOne(ctx, bson.M{"_id": course.AuthorID}).Decode(&author)
+
+	// Check if current user owns this course
+	userIDStr, _ := c.Get("userID")
+	userID, _ := primitive.ObjectIDFromHex(userIDStr.(string))
+	isOwner := course.AuthorID == userID
+
+	// Check if course is saved by user
+	savedCoursesCollection := config.GetCollection("saved_courses")
+	var savedCourse models.SavedCourse
+	isSaved := savedCoursesCollection.FindOne(ctx, bson.M{
+		"user_id":   userID,
+		"course_id": courseID,
+	}).Decode(&savedCourse) == nil
+
+	c.JSON(http.StatusOK, gin.H{
+		"course": models.CourseResponse{
+			Course:      course,
+			AuthorName:  author.Name,
+			AuthorImage: author.ProfileImage,
+		},
+		"is_owner": isOwner,
+		"is_saved": isSaved,
+	})
+}
+
+// SaveCourse saves a course to user's library
+func SaveCourse(c *gin.Context) {
+	courseIDStr := c.Param("id")
+	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	userIDStr, _ := c.Get("userID")
+	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Check if course exists
+	coursesCollection := config.GetCollection("courses")
+	var course models.Course
+	err = coursesCollection.FindOne(ctx, bson.M{"_id": courseID, "status": models.CourseStatusPublished}).Decode(&course)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+
+	// Check if already saved
+	savedCoursesCollection := config.GetCollection("saved_courses")
+	var existingSaved models.SavedCourse
+	err = savedCoursesCollection.FindOne(ctx, bson.M{"user_id": userID, "course_id": courseID}).Decode(&existingSaved)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Course already saved to library"})
+		return
+	}
+
+	// Save course
+	savedCourse := models.SavedCourse{
+		ID:        primitive.NewObjectID(),
+		UserID:    userID,
+		CourseID:  courseID,
+		CreatedAt: time.Now(),
+	}
+
+	_, err = savedCoursesCollection.InsertOne(ctx, savedCourse)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving course"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Course saved to library",
+	})
+}
+
+// UnsaveCourse removes a course from user's library
+func UnsaveCourse(c *gin.Context) {
+	courseIDStr := c.Param("id")
+	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+		return
+	}
+
+	userIDStr, _ := c.Get("userID")
+	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	savedCoursesCollection := config.GetCollection("saved_courses")
+	result, err := savedCoursesCollection.DeleteOne(ctx, bson.M{"user_id": userID, "course_id": courseID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error removing course from library"})
+		return
+	}
+
+	if result.DeletedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found in library"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Course removed from library",
+	})
+}
