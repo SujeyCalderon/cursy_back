@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ type StorageService struct {
 	bucketName string
 	endpoint   string
 	publicUrl  string
+	isLocal    bool
 }
 
 func NewStorageService() *StorageService {
@@ -31,9 +33,24 @@ func NewStorageService() *StorageService {
 	region := os.Getenv("IDRIVE_REGION")
 	publicUrl := os.Getenv("IDRIVE_PUBLIC_URL") // Optional: Custom domain or public endpoint
 
+	// Fallback to local storage if S3 config is missing
 	if endpoint == "" || accessKey == "" || secretKey == "" || bucketName == "" {
-		fmt.Println("Warning: Storage configuration missing")
-		return nil
+		fmt.Println("Warning: Storage configuration missing, using local storage")
+		// Ensure uploads directory exists
+		if _, err := os.Stat("./uploads"); os.IsNotExist(err) {
+			os.Mkdir("./uploads", 0755)
+		}
+
+		// Use PUBLIC_URL env var or default
+		baseUrl := os.Getenv("PUBLIC_URL")
+		if baseUrl == "" {
+			baseUrl = "http://52.20.206.74:8080" // Default to current server IP
+		}
+
+		return &StorageService{
+			isLocal:   true,
+			publicUrl: baseUrl,
+		}
 	}
 
 	if region == "" {
@@ -65,17 +82,41 @@ func NewStorageService() *StorageService {
 		bucketName: bucketName,
 		endpoint:   endpoint,
 		publicUrl:  publicUrl,
+		isLocal:    false,
 	}
 }
 
 func (s *StorageService) UploadFile(file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
-	if s.client == nil {
-		return "", fmt.Errorf("storage service not configured")
-	}
-
 	// Generate unique filename
 	ext := filepath.Ext(fileHeader.Filename)
 	uniqueFilename := uuid.New().String() + ext
+
+	// Handle Local Storage
+	if s.isLocal {
+		dst := filepath.Join("./uploads", uniqueFilename)
+		out, err := os.Create(dst)
+		if err != nil {
+			return "", fmt.Errorf("failed to create local file: %w", err)
+		}
+		defer out.Close()
+
+		// Reset file pointer just in case
+		if seeker, ok := file.(io.Seeker); ok {
+			seeker.Seek(0, 0)
+		}
+
+		_, err = io.Copy(out, file)
+		if err != nil {
+			return "", fmt.Errorf("failed to save local file: %w", err)
+		}
+
+		return fmt.Sprintf("%s/uploads/%s", s.publicUrl, uniqueFilename), nil
+	}
+
+	// Handle S3 Storage
+	if s.client == nil {
+		return "", fmt.Errorf("storage service not configured")
+	}
 
 	ctx := context.Background()
 
@@ -94,9 +135,6 @@ func (s *StorageService) UploadFile(file multipart.File, fileHeader *multipart.F
 	}
 
 	// Construct public URL
-	// Usually IDrive public URL: https://<endpoint>/<bucket>/<filename>
-	// Or sometimes: https://<bucket>.<endpoint>/<filename>
-	// We'll use the configured PublicURL or Endpoint + Bucket + Filename (Path Style)
 	fileURL := fmt.Sprintf("%s/%s/%s", s.publicUrl, s.bucketName, uniqueFilename)
 
 	return fileURL, nil
