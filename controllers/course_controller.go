@@ -266,18 +266,18 @@ func GetFeed(c *gin.Context) {
 	for _, course := range courses {
 		var author models.User
 		err := usersCollection.FindOne(ctx, bson.M{"_id": course.AuthorID}).Decode(&author)
-		
+
 		courseResponse := models.CourseResponse{
 			Course:      course,
 			AuthorName:  "",
 			AuthorImage: "",
 		}
-		
+
 		if err == nil {
 			courseResponse.AuthorName = author.Name
 			courseResponse.AuthorImage = author.ProfileImage
 		}
-		
+
 		coursesWithAuthors = append(coursesWithAuthors, courseResponse)
 	}
 
@@ -302,9 +302,24 @@ func GetCourseDetail(c *gin.Context) {
 	collection := config.GetCollection("courses")
 
 	var course models.Course
-	err = collection.FindOne(ctx, bson.M{"_id": courseID, "status": models.CourseStatusPublished}).Decode(&course)
+	err = collection.FindOne(ctx, bson.M{"_id": courseID}).Decode(&course)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+
+	// Get current user ID
+	userIDStr, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	userID, _ := primitive.ObjectIDFromHex(userIDStr.(string))
+	isOwner := course.AuthorID == userID
+
+	// If not owner and not published, deny access
+	if course.Status != models.CourseStatusPublished && !isOwner {
+		c.JSON(http.StatusForbidden, gin.H{"error": "This course is a draft and only the author can see it"})
 		return
 	}
 
@@ -312,11 +327,6 @@ func GetCourseDetail(c *gin.Context) {
 	usersCollection := config.GetCollection("users")
 	var author models.User
 	usersCollection.FindOne(ctx, bson.M{"_id": course.AuthorID}).Decode(&author)
-
-	// Check if current user owns this course
-	userIDStr, _ := c.Get("userID")
-	userID, _ := primitive.ObjectIDFromHex(userIDStr.(string))
-	isOwner := course.AuthorID == userID
 
 	// Check if course is saved by user
 	savedCoursesCollection := config.GetCollection("saved_courses")
