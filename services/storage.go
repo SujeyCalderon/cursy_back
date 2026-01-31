@@ -33,8 +33,11 @@ func NewStorageService() *StorageService {
 	region := os.Getenv("IDRIVE_REGION")
 	publicUrl := os.Getenv("IDRIVE_PUBLIC_URL") // Optional: Custom domain or public endpoint
 
+	// FORCE LOCAL STORAGE to avoid S3 permission issues
+	forceLocal := true
+
 	// Fallback to local storage if S3 config is missing
-	if endpoint == "" || accessKey == "" || secretKey == "" || bucketName == "" {
+	if forceLocal || endpoint == "" || accessKey == "" || secretKey == "" || bucketName == "" {
 		fmt.Println("Warning: Storage configuration missing, using local storage")
 		// Ensure uploads directory exists
 		if _, err := os.Stat("./uploads"); os.IsNotExist(err) {
