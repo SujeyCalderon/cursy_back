@@ -19,14 +19,16 @@ type User struct {
 	HasPublishedCourse bool               `bson:"has_published_course" json:"has_published_course"`
 	CreatedAt          time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt          time.Time          `bson:"updated_at" json:"updated_at"`
+	University         string             `bson:"university" json:"university"`
 }
 
 // UserRegisterInput represents the input for user registration
 type UserRegisterInput struct {
-	Name     string `json:"name" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
-	INEUrl   string `json:"ine_url" binding:"required"`
+	Name       string `json:"name" binding:"required"`
+	Email      string `json:"email" binding:"required,email"`
+	Password   string `json:"password" binding:"required,min=6"`
+	INEUrl     string `json:"ine_url" binding:"required"`
+	University string `json:"university"`
 }
 
 // UserLoginInput represents the input for user login
@@ -40,6 +42,7 @@ type UserUpdateInput struct {
 	Name         string `json:"name"`
 	ProfileImage string `json:"profile_image"`
 	Bio          string `json:"bio"`
+	University   string `json:"university"`
 }
 
 // PasswordRecoveryInput represents the input for password recovery

@@ -59,6 +59,7 @@ func GetMyProfile(c *gin.Context) {
 			"bio":                  user.Bio,
 			"is_verified":          user.IsVerified,
 			"has_published_course": user.HasPublishedCourse,
+			"university":           user.University,
 			"created_at":           user.CreatedAt,
 		},
 		"stats": gin.H{
@@ -98,6 +99,9 @@ func UpdateProfile(c *gin.Context) {
 	if input.Bio != "" {
 		update["bio"] = input.Bio
 	}
+	if input.University != "" {
+		update["university"] = input.University
+	}
 
 	collection := config.GetCollection("users")
 	_, err = collection.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{"$set": update})
@@ -125,7 +129,7 @@ func GetMyCourses(c *gin.Context) {
 
 	collection := config.GetCollection("courses")
 	findOptions := options.Find().SetSort(bson.D{{"created_at", -1}})
-	
+
 	cursor, err := collection.Find(ctx, bson.M{"author_id": userID}, findOptions)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching courses"})
@@ -214,18 +218,18 @@ func GetSavedCourses(c *gin.Context) {
 	for _, course := range courses {
 		var author models.User
 		err := usersCollection.FindOne(ctx, bson.M{"_id": course.AuthorID}).Decode(&author)
-		
+
 		courseResponse := models.CourseResponse{
 			Course:      course,
 			AuthorName:  "",
 			AuthorImage: "",
 		}
-		
+
 		if err == nil {
 			courseResponse.AuthorName = author.Name
 			courseResponse.AuthorImage = author.ProfileImage
 		}
-		
+
 		coursesWithAuthors = append(coursesWithAuthors, courseResponse)
 	}
 
