@@ -90,6 +90,7 @@ func (c *Client) ReadPump() {
 			ConversationID string `json:"conversation_id"`
 			ReceiverID     string `json:"receiver_id"`
 			Content        string `json:"content"`
+			SenderID       string `json:"sender_id"` // Campo opcional al llegar, lo llenaremos nosotros
 		}
 
 		if err := json.Unmarshal(messageData, &input); err != nil {
@@ -97,13 +98,19 @@ func (c *Client) ReadPump() {
 			continue
 		}
 
+		// Llenamos el sender_id con el ID del cliente que tiene el socket abierto
+		input.SenderID = c.ID
+
 		// Guardar el mensaje en la base de datos
 		saveChatMessage(c.ID, input.ConversationID, input.Content)
 
 		// Reenviar el mensaje al destinatario si está conectado
+		// Volvemos a serializar para incluir el sender_id
+		forwardData, _ := json.Marshal(input)
+
 		MainHub.Mutex.Lock()
 		if receiverClient, ok := MainHub.Clients[input.ReceiverID]; ok {
-			receiverClient.Send <- messageData
+			receiverClient.Send <- forwardData
 		}
 		MainHub.Mutex.Unlock()
 	}
