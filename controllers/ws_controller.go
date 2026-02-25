@@ -60,6 +60,11 @@ func (h *Hub) Run() {
 			h.Clients[client.ID] = client
 			h.Mutex.Unlock()
 			log.Printf("Usuario conectado: %s", client.ID)
+
+			// Primero enviamos al nuevo usuario el estado de los que ya están conectados (Snapshot)
+			h.sendInitialStatusSnapshot(client)
+
+			// Luego avisamos a los demás que este usuario se conectó
 			h.broadcastStatus(client.ID, "online")
 
 		case client := <-h.Unregister:
@@ -73,6 +78,31 @@ func (h *Hub) Run() {
 			} else {
 				h.Mutex.Unlock()
 			}
+		}
+	}
+}
+
+// sendInitialStatusSnapshot envía al cliente recién conectado el estado de todos los demás
+func (h *Hub) sendInitialStatusSnapshot(newClient *Client) {
+	h.Mutex.Lock()
+	defer h.Mutex.Unlock()
+
+	for id := range h.Clients {
+		if id == newClient.ID {
+			continue
+		}
+
+		message := map[string]string{
+			"type":      "user_status",
+			"sender_id": id,
+			"content":   "online",
+		}
+		data, _ := json.Marshal(message)
+
+		select {
+		case newClient.Send <- data:
+		default:
+			// Canal lleno
 		}
 	}
 }
