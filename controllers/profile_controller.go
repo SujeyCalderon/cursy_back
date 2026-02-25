@@ -14,7 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// GetMyProfile returns the current user's profile
+// GetMyProfile devuelve el perfil del usuario actual
 func GetMyProfile(c *gin.Context) {
 	userIDStr, _ := c.Get("userID")
 	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
@@ -26,7 +26,7 @@ func GetMyProfile(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Get user
+	// Obtener usuario
 	usersCollection := config.GetCollection("users")
 	var user models.User
 	err = usersCollection.FindOne(ctx, bson.M{"_id": userID}).Decode(&user)
@@ -35,7 +35,7 @@ func GetMyProfile(c *gin.Context) {
 		return
 	}
 
-	// Get user's courses count
+	// Obtener conteo de cursos del usuario
 	coursesCollection := config.GetCollection("courses")
 	publishedCount, _ := coursesCollection.CountDocuments(ctx, bson.M{
 		"author_id": userID,
@@ -46,7 +46,7 @@ func GetMyProfile(c *gin.Context) {
 		"status":    models.CourseStatusDraft,
 	})
 
-	// Get saved courses count
+	// Obtener conteo de cursos guardados
 	savedCoursesCollection := config.GetCollection("saved_courses")
 	savedCount, _ := savedCoursesCollection.CountDocuments(ctx, bson.M{"user_id": userID})
 
@@ -70,7 +70,7 @@ func GetMyProfile(c *gin.Context) {
 	})
 }
 
-// UpdateProfile updates the current user's profile
+// UpdateProfile actualiza el perfil del usuario actual
 func UpdateProfile(c *gin.Context) {
 	userIDStr, _ := c.Get("userID")
 	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
@@ -88,7 +88,7 @@ func UpdateProfile(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Build update document
+	// Construir documento de actualización
 	update := bson.M{"updated_at": time.Now()}
 	if input.Name != "" {
 		update["name"] = input.Name
@@ -115,7 +115,7 @@ func UpdateProfile(c *gin.Context) {
 	})
 }
 
-// GetMyCourses returns the current user's courses (both published and drafts)
+// GetMyCourses devuelve los cursos del usuario (publicados y borradores)
 func GetMyCourses(c *gin.Context) {
 	userIDStr, _ := c.Get("userID")
 	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
@@ -128,7 +128,7 @@ func GetMyCourses(c *gin.Context) {
 	defer cancel()
 
 	collection := config.GetCollection("courses")
-	findOptions := options.Find().SetSort(bson.D{{"created_at", -1}})
+	findOptions := options.Find().SetSort(bson.D{primitive.E{Key: "created_at", Value: -1}})
 
 	cursor, err := collection.Find(ctx, bson.M{"author_id": userID}, findOptions)
 	if err != nil {
@@ -143,7 +143,7 @@ func GetMyCourses(c *gin.Context) {
 		return
 	}
 
-	// Separate published and drafts
+	// Separar publicados de borradores
 	var published, drafts []models.Course
 	for _, course := range courses {
 		if course.Status == models.CourseStatusPublished {
@@ -159,7 +159,7 @@ func GetMyCourses(c *gin.Context) {
 	})
 }
 
-// GetSavedCourses returns courses saved by the current user
+// GetSavedCourses devuelve los cursos guardados por el usuario actual
 func GetSavedCourses(c *gin.Context) {
 	userIDStr, _ := c.Get("userID")
 	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
@@ -171,7 +171,7 @@ func GetSavedCourses(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Get saved course IDs
+	// Obtener IDs de cursos guardados
 	savedCoursesCollection := config.GetCollection("saved_courses")
 	cursor, err := savedCoursesCollection.Find(ctx, bson.M{"user_id": userID})
 	if err != nil {
@@ -186,7 +186,7 @@ func GetSavedCourses(c *gin.Context) {
 		return
 	}
 
-	// Get course IDs
+	// Obtener los IDs de los cursos
 	var courseIDs []primitive.ObjectID
 	for _, saved := range savedCourses {
 		courseIDs = append(courseIDs, saved.CourseID)
@@ -197,7 +197,7 @@ func GetSavedCourses(c *gin.Context) {
 		return
 	}
 
-	// Get courses
+	// Obtener los cursos
 	coursesCollection := config.GetCollection("courses")
 	cursor, err = coursesCollection.Find(ctx, bson.M{"_id": bson.M{"$in": courseIDs}})
 	if err != nil {
@@ -212,7 +212,7 @@ func GetSavedCourses(c *gin.Context) {
 		return
 	}
 
-	// Get author info for each course
+	// Obtener info del autor para cada curso
 	usersCollection := config.GetCollection("users")
 	var coursesWithAuthors []models.CourseResponse
 	for _, course := range courses {

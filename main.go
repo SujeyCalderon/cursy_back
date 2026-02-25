@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"cursy_back/config"
+	"cursy_back/controllers"
 	"cursy_back/routes"
 
 	"github.com/gin-gonic/gin"
@@ -11,7 +12,7 @@ import (
 )
 
 func init() {
-	// Load .env file if it exists (optional, won't fail if missing)
+	// Cargar archivo .env si existe
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
 	}
@@ -31,6 +32,7 @@ func main() {
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
+		// Manejo de preflight (OPTIONS)
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
@@ -39,13 +41,16 @@ func main() {
 		c.Next()
 	})
 
-	// Setup routes
+	// Configurar rutas
 	routes.SetupRoutes(router)
 
-	// Serve static files (uploads)
+	// Iniciar Hub de WebSockets
+	go controllers.MainHub.Run()
+
+	// Servir archivos estáticos (subidas locales)
 	router.Static("/uploads", "./uploads")
 
-	// Start server
+	// Iniciar servidor HTTP en puerto 8080
 	log.Println("Server starting on port 8080...")
 	if err := router.Run(":8080"); err != nil {
 		log.Fatal("Error starting server: ", err)

@@ -7,17 +7,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SetupRoutes configures all API routes
+// SetupRoutes configura todas las rutas del API
 func SetupRoutes(router *gin.Engine) {
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// API v1
 	api := router.Group("/api/v1")
 	{
-		// Auth routes (public)
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", controllers.Register)
@@ -25,7 +23,6 @@ func SetupRoutes(router *gin.Engine) {
 			auth.POST("/recover-password", controllers.RecoverPassword)
 		}
 
-		// Protected auth routes
 		authProtected := api.Group("/auth")
 		authProtected.Use(middleware.JWTAuth())
 		{
@@ -33,32 +30,24 @@ func SetupRoutes(router *gin.Engine) {
 			authProtected.DELETE("/account", controllers.DeleteAccount)
 		}
 
-		// Course routes (protected)
 		courses := api.Group("/courses")
 		courses.Use(middleware.JWTAuth())
 		{
-			// Create course (doesn't require published course)
 			courses.POST("", controllers.CreateCourse)
 
-			// Get feed (doesn't require published course - just shows the cards)
 			courses.GET("", controllers.GetFeed)
 
-			// Course detail - REQUIRES published course (trueque logic)
 			courses.GET("/:id", middleware.RequirePublishedCourse(), controllers.GetCourseDetail)
 
-			// Update and delete own courses
 			courses.PUT("/:id", controllers.UpdateCourse)
 			courses.DELETE("/:id", controllers.DeleteCourse)
 
-			// Publish course
 			courses.PUT("/:id/publish", controllers.PublishCourse)
 
-			// Save/unsave course to library - REQUIRES published course
 			courses.POST("/:id/save", middleware.RequirePublishedCourse(), controllers.SaveCourse)
 			courses.DELETE("/:id/save", controllers.UnsaveCourse)
 		}
 
-		// Profile routes (protected)
 		profile := api.Group("/profile")
 		profile.Use(middleware.JWTAuth())
 		{
@@ -68,7 +57,24 @@ func SetupRoutes(router *gin.Engine) {
 			profile.GET("/saved", controllers.GetSavedCourses)
 		}
 
-		// Upload routes (protected)
+		users := api.Group("/users")
+		users.Use(middleware.JWTAuth())
+		{
+			users.GET("", controllers.GetUsers)
+		}
+
+		chats := api.Group("/chats")
+		chats.Use(middleware.JWTAuth())
+		{
+			chats.GET("", controllers.GetConversations)
+			chats.POST("", controllers.CreateConversation)
+			chats.GET("/:id/messages", controllers.GetMessages)
+		}
+
+		// Conexión en tiempo real (WebSocket)
+		api.GET("/ws", middleware.JWTAuth(), controllers.WSHandler)
+
+		// Subida de archivos (protegidas)
 		upload := api.Group("/upload")
 		upload.Use(middleware.JWTAuth())
 		{

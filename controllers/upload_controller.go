@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UploadImage handles file uploads
 func UploadImage(c *gin.Context) {
 	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
@@ -16,7 +15,7 @@ func UploadImage(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// Initialize storage service
+	// Inicializar servicio de almacenamiento
 	storageService := services.NewStorageService()
 	if storageService == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Storage service not available"})

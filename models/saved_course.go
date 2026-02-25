@@ -6,7 +6,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// SavedCourse represents a course saved by a user to their library
+// SavedCourse representa un curso guardado por un usuario en su biblioteca
 type SavedCourse struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	UserID    primitive.ObjectID `bson:"user_id" json:"user_id"`

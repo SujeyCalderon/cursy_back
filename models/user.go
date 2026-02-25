@@ -6,7 +6,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// User represents a user in the system
+// User representa a un usuario en el sistema
 type User struct {
 	ID                 primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	Name               string             `bson:"name" json:"name" binding:"required"`
@@ -15,14 +15,14 @@ type User struct {
 	ProfileImage       string             `bson:"profile_image" json:"profile_image"`
 	Bio                string             `bson:"bio" json:"bio"`
 	INEUrl             string             `bson:"ine_url" json:"ine_url" binding:"required"`
-	IsVerified         bool               `bson:"is_verified" json:"is_verified"`
+	IsVerified         bool               `bson:"is_verified" json:"is_verified"` // Se verifica tras validar el INE
 	HasPublishedCourse bool               `bson:"has_published_course" json:"has_published_course"`
 	CreatedAt          time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt          time.Time          `bson:"updated_at" json:"updated_at"`
 	University         string             `bson:"university" json:"university"`
 }
 
-// UserRegisterInput represents the input for user registration
+// UserRegisterInput representa los datos para el registro de usuario
 type UserRegisterInput struct {
 	Name       string `json:"name" binding:"required"`
 	Email      string `json:"email" binding:"required,email"`
@@ -31,13 +31,13 @@ type UserRegisterInput struct {
 	University string `json:"university"`
 }
 
-// UserLoginInput represents the input for user login
+// UserLoginInput representa los datos para el inicio de sesión
 type UserLoginInput struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
 
-// UserUpdateInput represents the input for updating user profile
+// UserUpdateInput representa los datos para actualizar el perfil
 type UserUpdateInput struct {
 	Name         string `json:"name"`
 	ProfileImage string `json:"profile_image"`
@@ -45,12 +45,12 @@ type UserUpdateInput struct {
 	University   string `json:"university"`
 }
 
-// PasswordRecoveryInput represents the input for password recovery
+// PasswordRecoveryInput representa la solicitud de recuperación de contraseña
 type PasswordRecoveryInput struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
-// PasswordResetInput represents the input for password reset
+// PasswordResetInput representa el cambio de contraseña con token
 type PasswordResetInput struct {
 	Token       string `json:"token" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required,min=6"`

@@ -13,7 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// JWTAuth middleware validates JWT tokens
+// JWTAuth valida el token JWT en las peticiones
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -23,7 +23,7 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Check Bearer prefix
+		// Verificar el prefijo "Bearer"
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
@@ -39,14 +39,14 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Set user info in context
+		// Guardar info del usuario en el contexto de Gin
 		c.Set("userID", claims.UserID)
 		c.Set("email", claims.Email)
 		c.Next()
 	}
 }
 
-// RequirePublishedCourse middleware checks if user has published a course (trueque logic)
+// RequirePublishedCourse verifica si el usuario ha publicado un curso (Lógica de Trueque)
 func RequirePublishedCourse() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDStr, exists := c.Get("userID")
@@ -63,7 +63,7 @@ func RequirePublishedCourse() gin.HandlerFunc {
 			return
 		}
 
-		// Get user from database
+		// Consultar usuario en la DB
 		collection := config.GetCollection("users")
 		var user models.User
 		err = collection.FindOne(c.Request.Context(), bson.M{"_id": userID}).Decode(&user)
@@ -73,7 +73,7 @@ func RequirePublishedCourse() gin.HandlerFunc {
 			return
 		}
 
-		// Check if user has published a course
+		// Validar si tiene un curso publicado
 		if !user.HasPublishedCourse {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "You must publish a course first to access other courses",

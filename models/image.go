@@ -6,7 +6,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// Image represents an image stored in external storage (iDrive)
+// Image representa una imagen almacenada externamente (iDrive/S3 o Local)
 type Image struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	URL       string             `bson:"url" json:"url" binding:"required"`
@@ -15,7 +15,7 @@ type Image struct {
 	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 }
 
-// ImageUploadInput represents the input for uploading an image
+// ImageUploadInput representa los datos tras subir una imagen
 type ImageUploadInput struct {
 	URL      string `json:"url" binding:"required"`
 	CourseID string `json:"course_id"`

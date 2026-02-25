@@ -14,7 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// Register handles user registration
+// Register maneja el registro de nuevos usuarios
 func Register(c *gin.Context) {
 	var input models.UserRegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -26,7 +26,7 @@ func Register(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Check if email already exists
+	// Verificar si el email ya existe en la DB
 	var existingUser models.User
 	err := collection.FindOne(ctx, bson.M{"email": input.Email}).Decode(&existingUser)
 	if err == nil {
@@ -34,21 +34,20 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	// Hash password
 	hashedPassword, err := utils.HashPassword(input.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error hashing password"})
 		return
 	}
 
-	// Create user
+	// Crear objeto de usuario con valores por defecto
 	user := models.User{
 		ID:                 primitive.NewObjectID(),
 		Name:               input.Name,
 		Email:              input.Email,
 		PasswordHash:       hashedPassword,
 		INEUrl:             input.INEUrl,
-		IsVerified:         false, // Will be verified after INE validation
+		IsVerified:         false, 
 		HasPublishedCourse: false,
 		CreatedAt:          time.Now(),
 		UpdatedAt:          time.Now(),
@@ -60,7 +59,7 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	// Generate token
+	// Generar token JWT de acceso
 	token, err := utils.GenerateToken(user.ID.Hex(), user.Email)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
@@ -78,7 +77,7 @@ func Register(c *gin.Context) {
 	})
 }
 
-// Login handles user login
+// Login maneja la autenticación de usuarios existentes
 func Login(c *gin.Context) {
 	var input models.UserLoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -90,7 +89,7 @@ func Login(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Find user by email
+	// Buscar usuario por email en la DB
 	var user models.User
 	err := collection.FindOne(ctx, bson.M{"email": input.Email}).Decode(&user)
 	if err != nil {
@@ -98,13 +97,13 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Check password
+	// Validar contraseña
 	if !utils.CheckPasswordHash(input.Password, user.PasswordHash) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
 
-	// Generate token
+	// Generar token JWT
 	token, err := utils.GenerateToken(user.ID.Hex(), user.Email)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
@@ -124,7 +123,7 @@ func Login(c *gin.Context) {
 	})
 }
 
-// RecoverPassword handles password recovery request
+// RecoverPassword maneja la solicitud de recuperación de contraseña
 func RecoverPassword(c *gin.Context) {
 	var input models.PasswordRecoveryInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -136,34 +135,26 @@ func RecoverPassword(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Check if user exists
+	// Verificar existencia (no revela si el email existe por seguridad)
 	var user models.User
 	err := collection.FindOne(ctx, bson.M{"email": input.Email}).Decode(&user)
 	if err != nil {
-		// Don't reveal if email exists or not for security
 		c.JSON(http.StatusOK, gin.H{"message": "If the email exists, a recovery link has been sent"})
 		return
 	}
 
-	// TODO: In production, send email with recovery token
-	// For now, just return success message
 	c.JSON(http.StatusOK, gin.H{
 		"message": "If the email exists, a recovery link has been sent",
 	})
 }
 
-// Logout handles user logout (client-side token removal)
 func Logout(c *gin.Context) {
-	// In a more complete implementation, we would:
-	// 1. Add the token to a blacklist in Redis/DB
-	// 2. Set token expiration
-	// For now, logout is handled client-side by removing the token
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Logged out successfully",
 	})
 }
 
-// DeleteAccount handles account deletion
+// DeleteAccount maneja la eliminación total de la cuenta y sus datos
 func DeleteAccount(c *gin.Context) {
 	userIDStr, _ := c.Get("userID")
 	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
@@ -175,7 +166,7 @@ func DeleteAccount(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Delete user's courses
+	// Borrar cursos publicados por el usuario
 	coursesCollection := config.GetCollection("courses")
 	_, err = coursesCollection.DeleteMany(ctx, bson.M{"author_id": userID})
 	if err != nil {
@@ -183,7 +174,7 @@ func DeleteAccount(c *gin.Context) {
 		return
 	}
 
-	// Delete user's saved courses
+	// Borrar registros de cursos guardados por el usuario
 	savedCoursesCollection := config.GetCollection("saved_courses")
 	_, err = savedCoursesCollection.DeleteMany(ctx, bson.M{"user_id": userID})
 	if err != nil {

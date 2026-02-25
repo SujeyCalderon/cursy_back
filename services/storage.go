@@ -31,20 +31,16 @@ func NewStorageService() *StorageService {
 	secretKey := os.Getenv("IDRIVE_SECRET_KEY")
 	bucketName := os.Getenv("IDRIVE_BUCKET")
 	region := os.Getenv("IDRIVE_REGION")
-	publicUrl := os.Getenv("IDRIVE_PUBLIC_URL") // Optional: Custom domain or public endpoint
+	publicUrl := os.Getenv("IDRIVE_PUBLIC_URL")
 
-	// FORCE LOCAL STORAGE to avoid S3 permission issues
 	forceLocal := true
 
-	// Fallback to local storage if S3 config is missing
 	if forceLocal || endpoint == "" || accessKey == "" || secretKey == "" || bucketName == "" {
 		fmt.Println("Warning: Storage configuration missing, using local storage")
-		// Ensure uploads directory exists
 		if _, err := os.Stat("./uploads"); os.IsNotExist(err) {
 			os.Mkdir("./uploads", 0755)
 		}
-
-		// Use PUBLIC_URL env var or default
+		
 		baseUrl := os.Getenv("PUBLIC_URL")
 		if baseUrl == "" {
 			baseUrl = "http://52.20.206.74:8080" // Default to current server IP
@@ -60,7 +56,7 @@ func NewStorageService() *StorageService {
 		region = "us-east-1"
 	}
 
-	// Load custom configuration
+	// Cargar configuración de AWS
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(region),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
@@ -70,10 +66,10 @@ func NewStorageService() *StorageService {
 		return nil
 	}
 
-	// Create S3 client with custom endpoint resolver for IDrive
+	// Cliente S3 con endpoint personalizado para IDrive
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(endpoint)
-		o.UsePathStyle = true // IDrive usually works better with path style
+		o.UsePathStyle = true 
 	})
 
 	if publicUrl == "" {
@@ -90,11 +86,11 @@ func NewStorageService() *StorageService {
 }
 
 func (s *StorageService) UploadFile(file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
-	// Generate unique filename
+	// Generar nombre de archivo único con UUID
 	ext := filepath.Ext(fileHeader.Filename)
 	uniqueFilename := uuid.New().String() + ext
 
-	// Handle Local Storage
+	// Manejo de almacenamiento Local
 	if s.isLocal {
 		dst := filepath.Join("./uploads", uniqueFilename)
 		out, err := os.Create(dst)
@@ -103,7 +99,7 @@ func (s *StorageService) UploadFile(file multipart.File, fileHeader *multipart.F
 		}
 		defer out.Close()
 
-		// Reset file pointer just in case
+		// Resetear puntero del archivo por seguridad
 		if seeker, ok := file.(io.Seeker); ok {
 			seeker.Seek(0, 0)
 		}
@@ -116,28 +112,28 @@ func (s *StorageService) UploadFile(file multipart.File, fileHeader *multipart.F
 		return fmt.Sprintf("%s/uploads/%s", s.publicUrl, uniqueFilename), nil
 	}
 
-	// Handle S3 Storage
+	// Manejo de almacenamiento en S3/IDrive
 	if s.client == nil {
 		return "", fmt.Errorf("storage service not configured")
 	}
 
 	ctx := context.Background()
 
-	// Upload file
+	// Subir archivo al bucket
 	uploader := manager.NewUploader(s.client)
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucketName),
 		Key:         aws.String(uniqueFilename),
 		Body:        file,
 		ContentType: aws.String(fileHeader.Header.Get("Content-Type")),
-		ACL:         types.ObjectCannedACLPublicRead, // Set file as publicly readable
+		ACL:         types.ObjectCannedACLPublicRead, 
 	})
 
 	if err != nil {
 		return "", fmt.Errorf("failed to upload file to S3/IDrive: %w", err)
 	}
 
-	// Construct public URL
+	// Construir URL pública final
 	fileURL := fmt.Sprintf("%s/%s/%s", s.publicUrl, s.bucketName, uniqueFilename)
 
 	return fileURL, nil

@@ -1,0 +1,178 @@
+package controllers
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"net/http"
+	"sync"
+	"time"
+
+	"cursy_back/config"
+	"cursy_back/models"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+// Upgrader para convertir HTTP a WebSocket
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+// Client representa al usuario conectado mediante WebSocket
+type Client struct {
+	ID   string
+	Conn *websocket.Conn
+	Send chan []byte
+}
+
+// Hub gestiona todas las conexiones activas
+type Hub struct {
+	Clients    map[string]*Client
+	Register   chan *Client
+	Unregister chan *Client
+	Mutex      sync.Mutex
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		Clients:    make(map[string]*Client),
+		Register:   make(chan *Client),
+		Unregister: make(chan *Client),
+	}
+}
+
+var MainHub = NewHub()
+
+// Run inicia el bucle del Hub
+func (h *Hub) Run() {
+	for {
+		select {
+		case client := <-h.Register:
+			h.Mutex.Lock()
+			h.Clients[client.ID] = client
+			h.Mutex.Unlock()
+			log.Printf("Usuario conectado: %s", client.ID)
+
+		case client := <-h.Unregister:
+			h.Mutex.Lock()
+			if _, ok := h.Clients[client.ID]; ok {
+				delete(h.Clients, client.ID)
+				close(client.Send)
+			}
+			h.Mutex.Unlock()
+			log.Printf("Usuario desconectado: %s", client.ID)
+		}
+	}
+}
+
+func (c *Client) ReadPump() {
+	defer func() {
+		MainHub.Unregister <- c
+		c.Conn.Close()
+	}()
+
+	for {
+		_, messageData, err := c.Conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		// El mensaje que llega del cliente debe tener: conversation_id, receiver_id y text
+		var input struct {
+			ConversationID string `json:"conversation_id"`
+			ReceiverID     string `json:"receiver_id"`
+			Content        string `json:"content"`
+		}
+
+		if err := json.Unmarshal(messageData, &input); err != nil {
+			log.Printf("Error al decodificar mensaje: %v", err)
+			continue
+		}
+
+		// Guardar el mensaje en la base de datos
+		saveChatMessage(c.ID, input.ConversationID, input.Content)
+
+		// Reenviar el mensaje al destinatario si está conectado
+		MainHub.Mutex.Lock()
+		if receiverClient, ok := MainHub.Clients[input.ReceiverID]; ok {
+			receiverClient.Send <- messageData
+		}
+		MainHub.Mutex.Unlock()
+	}
+}
+
+func (c *Client) WritePump() {
+	for {
+		select {
+		case message, ok := <-c.Send:
+			if !ok {
+				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			c.Conn.WriteMessage(websocket.TextMessage, message)
+		}
+	}
+}
+
+// WSHandler maneja la conexión WebSocket
+func WSHandler(c *gin.Context) {
+	// Obtener ID del usuario del token JWT (el middleware ya lo puso en el contexto)
+	userIDStr, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado"})
+		return
+	}
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("Error al subir a WebSocket: %v", err)
+		return
+	}
+
+	client := &Client{
+		ID:   userIDStr.(string),
+		Conn: conn,
+		Send: make(chan []byte, 256),
+	}
+
+	MainHub.Register <- client
+
+	go client.WritePump()
+	go client.ReadPump()
+}
+
+func saveChatMessage(senderIDStr, conversationIDStr, content string) {
+	senderID, _ := primitive.ObjectIDFromHex(senderIDStr)
+	conversationID, _ := primitive.ObjectIDFromHex(conversationIDStr)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	//Guardar mensaje
+	msgCollection := config.GetCollection("messages")
+	msg := models.Message{
+		ID:             primitive.NewObjectID(),
+		ConversationID: conversationID,
+		SenderID:       senderID,
+		Content:        content,
+		CreatedAt:      time.Now(),
+	}
+	msgCollection.InsertOne(ctx, msg)
+
+	//Actualizar conversación con el último mensaje
+	convCollection := config.GetCollection("conversations")
+	convCollection.UpdateOne(ctx, bson.M{"_id": conversationID}, bson.M{
+		"$set": bson.M{
+			"last_message": content,
+			"updated_at":   time.Now(),
+		},
+	})
+}

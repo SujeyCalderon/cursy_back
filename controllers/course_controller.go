@@ -14,7 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// CreateCourse creates a new course as draft
+// CreateCourse crea un nuevo curso en estado borrador
 func CreateCourse(c *gin.Context) {
 	var input models.CourseCreateInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -32,7 +32,7 @@ func CreateCourse(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Set order for blocks if not provided
+	// Asignar orden a los bloques si no se proporcionó
 	for i := range input.Blocks {
 		if input.Blocks[i].Order == 0 {
 			input.Blocks[i].Order = i + 1
@@ -64,7 +64,7 @@ func CreateCourse(c *gin.Context) {
 	})
 }
 
-// UpdateCourse updates an existing course
+// UpdateCourse actualiza un curso existente
 func UpdateCourse(c *gin.Context) {
 	courseIDStr := c.Param("id")
 	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
@@ -91,7 +91,7 @@ func UpdateCourse(c *gin.Context) {
 
 	collection := config.GetCollection("courses")
 
-	// Check if course exists and belongs to user
+	// Verificar si el curso existe y pertenece al usuario
 	var course models.Course
 	err = collection.FindOne(ctx, bson.M{"_id": courseID, "author_id": userID}).Decode(&course)
 	if err != nil {
@@ -99,7 +99,7 @@ func UpdateCourse(c *gin.Context) {
 		return
 	}
 
-	// Build update document
+	// Construir documento de actualización
 	update := bson.M{"updated_at": time.Now()}
 	if input.Title != "" {
 		update["title"] = input.Title
@@ -111,7 +111,7 @@ func UpdateCourse(c *gin.Context) {
 		update["cover_image"] = input.CoverImage
 	}
 	if input.Blocks != nil {
-		// Set order for blocks
+		// Asignar orden a los bloques
 		for i := range input.Blocks {
 			if input.Blocks[i].Order == 0 {
 				input.Blocks[i].Order = i + 1
@@ -131,7 +131,7 @@ func UpdateCourse(c *gin.Context) {
 	})
 }
 
-// PublishCourse publishes a draft course
+// PublishCourse publica un curso que estaba en borrador
 func PublishCourse(c *gin.Context) {
 	courseIDStr := c.Param("id")
 	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
@@ -152,7 +152,7 @@ func PublishCourse(c *gin.Context) {
 
 	coursesCollection := config.GetCollection("courses")
 
-	// Check if course exists and belongs to user
+	// Verificar si el curso existe y pertenece al usuario
 	var course models.Course
 	err = coursesCollection.FindOne(ctx, bson.M{"_id": courseID, "author_id": userID}).Decode(&course)
 	if err != nil {
@@ -160,13 +160,13 @@ func PublishCourse(c *gin.Context) {
 		return
 	}
 
-	// Validate course has content
+	// Validar que el curso tenga contenido
 	if course.Title == "" || len(course.Blocks) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Course must have a title and at least one content block"})
 		return
 	}
 
-	// Update course status to published
+	// Cambiar estado a publicado
 	_, err = coursesCollection.UpdateOne(ctx, bson.M{"_id": courseID}, bson.M{
 		"$set": bson.M{
 			"status":     models.CourseStatusPublished,
@@ -178,7 +178,7 @@ func PublishCourse(c *gin.Context) {
 		return
 	}
 
-	// Update user's HasPublishedCourse to true
+	// Marcar que el usuario ya ha publicado un curso (Trueque)
 	usersCollection := config.GetCollection("users")
 	_, err = usersCollection.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{
 		"$set": bson.M{
@@ -196,7 +196,7 @@ func PublishCourse(c *gin.Context) {
 	})
 }
 
-// DeleteCourse deletes a course
+// DeleteCourse elimina un curso
 func DeleteCourse(c *gin.Context) {
 	courseIDStr := c.Param("id")
 	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
@@ -217,7 +217,7 @@ func DeleteCourse(c *gin.Context) {
 
 	collection := config.GetCollection("courses")
 
-	// Check if course exists and belongs to user
+	// Verificar si el curso existe y pertenece al usuario
 	result, err := collection.DeleteOne(ctx, bson.M{"_id": courseID, "author_id": userID})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting course"})
@@ -229,7 +229,7 @@ func DeleteCourse(c *gin.Context) {
 		return
 	}
 
-	// Also remove from saved courses
+	// También eliminar de la biblioteca de otros usuarios que lo guardaron
 	savedCoursesCollection := config.GetCollection("saved_courses")
 	_, _ = savedCoursesCollection.DeleteMany(ctx, bson.M{"course_id": courseID})
 
@@ -238,15 +238,15 @@ func DeleteCourse(c *gin.Context) {
 	})
 }
 
-// GetFeed returns all published courses
+// GetFeed devuelve todos los cursos publicados
 func GetFeed(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	collection := config.GetCollection("courses")
 
-	// Find all published courses
-	findOptions := options.Find().SetSort(bson.D{{"created_at", -1}})
+	// Buscar todos los cursos publicados
+	findOptions := options.Find().SetSort(bson.D{primitive.E{Key: "created_at", Value: -1}})
 	cursor, err := collection.Find(ctx, bson.M{"status": models.CourseStatusPublished}, findOptions)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching courses"})
@@ -260,7 +260,7 @@ func GetFeed(c *gin.Context) {
 		return
 	}
 
-	// Get author info for each course
+	// Obtener información del autor para cada curso
 	usersCollection := config.GetCollection("users")
 	var coursesWithAuthors []models.CourseResponse
 	for _, course := range courses {
@@ -287,7 +287,7 @@ func GetFeed(c *gin.Context) {
 	})
 }
 
-// GetCourseDetail returns a single course with full details
+// GetCourseDetail devuelve un curso con todos sus detalles
 func GetCourseDetail(c *gin.Context) {
 	courseIDStr := c.Param("id")
 	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
@@ -308,7 +308,7 @@ func GetCourseDetail(c *gin.Context) {
 		return
 	}
 
-	// Get current user ID
+	// Obtener ID del usuario actual
 	userIDStr, ok := c.Get("userID")
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -317,18 +317,18 @@ func GetCourseDetail(c *gin.Context) {
 	userID, _ := primitive.ObjectIDFromHex(userIDStr.(string))
 	isOwner := course.AuthorID == userID
 
-	// If not owner and not published, deny access
+	// Si no es el autor y no está publicado, denegar acceso
 	if course.Status != models.CourseStatusPublished && !isOwner {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This course is a draft and only the author can see it"})
 		return
 	}
 
-	// Get author info
+	// Obtener info del autor
 	usersCollection := config.GetCollection("users")
 	var author models.User
 	usersCollection.FindOne(ctx, bson.M{"_id": course.AuthorID}).Decode(&author)
 
-	// Check if course is saved by user
+	// Verificar si el usuario ya guardó este curso
 	savedCoursesCollection := config.GetCollection("saved_courses")
 	var savedCourse models.SavedCourse
 	isSaved := savedCoursesCollection.FindOne(ctx, bson.M{
@@ -347,7 +347,7 @@ func GetCourseDetail(c *gin.Context) {
 	})
 }
 
-// SaveCourse saves a course to user's library
+// SaveCourse guarda un curso en la biblioteca del usuario
 func SaveCourse(c *gin.Context) {
 	courseIDStr := c.Param("id")
 	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
@@ -366,7 +366,7 @@ func SaveCourse(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Check if course exists
+	// Verificar si el curso existe
 	coursesCollection := config.GetCollection("courses")
 	var course models.Course
 	err = coursesCollection.FindOne(ctx, bson.M{"_id": courseID, "status": models.CourseStatusPublished}).Decode(&course)
@@ -375,7 +375,7 @@ func SaveCourse(c *gin.Context) {
 		return
 	}
 
-	// Check if already saved
+	// Verificar si ya está guardado
 	savedCoursesCollection := config.GetCollection("saved_courses")
 	var existingSaved models.SavedCourse
 	err = savedCoursesCollection.FindOne(ctx, bson.M{"user_id": userID, "course_id": courseID}).Decode(&existingSaved)
@@ -403,7 +403,7 @@ func SaveCourse(c *gin.Context) {
 	})
 }
 
-// UnsaveCourse removes a course from user's library
+// UnsaveCourse elimina un curso de la biblioteca del usuario
 func UnsaveCourse(c *gin.Context) {
 	courseIDStr := c.Param("id")
 	courseID, err := primitive.ObjectIDFromHex(courseIDStr)
