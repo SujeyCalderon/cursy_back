@@ -60,15 +60,42 @@ func (h *Hub) Run() {
 			h.Clients[client.ID] = client
 			h.Mutex.Unlock()
 			log.Printf("Usuario conectado: %s", client.ID)
+			h.broadcastStatus(client.ID, "online")
 
 		case client := <-h.Unregister:
 			h.Mutex.Lock()
 			if _, ok := h.Clients[client.ID]; ok {
 				delete(h.Clients, client.ID)
 				close(client.Send)
+				h.Mutex.Unlock() // Desbloquear antes de broadcast
+				log.Printf("Usuario desconectado: %s", client.ID)
+				h.broadcastStatus(client.ID, "offline")
+			} else {
+				h.Mutex.Unlock()
 			}
-			h.Mutex.Unlock()
-			log.Printf("Usuario desconectado: %s", client.ID)
+		}
+	}
+}
+
+// broadcastStatus envía un evento de estatus a todos los usuarios conectados
+func (h *Hub) broadcastStatus(userID string, status string) {
+	h.Mutex.Lock()
+	defer h.Mutex.Unlock()
+
+	message := map[string]string{
+		"type":      "user_status",
+		"sender_id": userID,
+		"content":   status,
+	}
+	data, _ := json.Marshal(message)
+
+	for id, client := range h.Clients {
+		if id != userID { // No enviárselo a uno mismo
+			select {
+			case client.Send <- data:
+			default:
+				// Si el canal está lleno, desconectar al cliente (o ignorar)
+			}
 		}
 	}
 }
@@ -87,6 +114,7 @@ func (c *Client) ReadPump() {
 
 		// El mensaje que llega del cliente debe tener: conversation_id, receiver_id y text
 		var input struct {
+			Type           string `json:"type"`
 			ConversationID string `json:"conversation_id"`
 			ReceiverID     string `json:"receiver_id"`
 			Content        string `json:"content"`
@@ -96,6 +124,11 @@ func (c *Client) ReadPump() {
 		if err := json.Unmarshal(messageData, &input); err != nil {
 			log.Printf("Error al decodificar mensaje: %v", err)
 			continue
+		}
+
+		// Por defecto el tipo es chat si viene vacío
+		if input.Type == "" {
+			input.Type = "chat"
 		}
 
 		// Llenamos el sender_id con el ID del cliente que tiene el socket abierto
