@@ -61,6 +61,7 @@ func SetupRoutes(router *gin.Engine) {
 		users.Use(middleware.JWTAuth())
 		{
 			users.GET("", controllers.GetUsers)
+			users.GET("/online", controllers.GetOnlineUsers)
 		}
 
 		chats := api.Group("/chats")

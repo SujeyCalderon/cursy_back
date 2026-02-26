@@ -112,6 +112,19 @@ func (h *Hub) sendInitialStatusSnapshot(newClient *Client) {
 	}
 }
 
+// GetOnlineUsers devuelve la lista de IDs de usuarios conectados al Hub
+func GetOnlineUsers(c *gin.Context) {
+	MainHub.Mutex.Lock()
+	defer MainHub.Mutex.Unlock()
+
+	onlineIDs := make([]string, 0, len(MainHub.Clients))
+	for id := range MainHub.Clients {
+		onlineIDs = append(onlineIDs, id)
+	}
+
+	c.JSON(200, gin.H{"online_users": onlineIDs})
+}
+
 // broadcastStatus envía un evento de estatus a todos los usuarios conectados
 func (h *Hub) broadcastStatus(userID string, status string) {
 	h.Mutex.Lock()
