@@ -57,6 +57,11 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.Register:
 			h.Mutex.Lock()
+			// Si el usuario ya tiene una conexión activa, cerrarla primero
+			if oldClient, exists := h.Clients[client.ID]; exists {
+				close(oldClient.Send)
+				oldClient.Conn.Close()
+			}
 			h.Clients[client.ID] = client
 			h.Mutex.Unlock()
 			log.Printf("Usuario conectado: %s", client.ID)
