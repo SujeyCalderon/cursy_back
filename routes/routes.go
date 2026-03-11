@@ -46,6 +46,10 @@ func SetupRoutes(router *gin.Engine) {
 
 			courses.POST("/:id/save", middleware.RequirePublishedCourse(), controllers.SaveCourse)
 			courses.DELETE("/:id/save", controllers.UnsaveCourse)
+
+			// Rutas para Comentarios
+			courses.GET("/:id/comments", controllers.GetCommentsByCourse)
+			courses.POST("/:id/comments", controllers.CreateComment)
 		}
 
 		profile := api.Group("/profile")
