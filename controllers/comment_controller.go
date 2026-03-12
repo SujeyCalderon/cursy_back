@@ -57,7 +57,7 @@ func CreateComment(c *gin.Context) {
 		CourseID:  courseID,
 		UserID:    userID,
 		Content:   input.Content,
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().Truncate(time.Second),
 	}
 
 	commentsCollection := config.GetCollection("comments")
@@ -67,9 +67,25 @@ func CreateComment(c *gin.Context) {
 		return
 	}
 
+	// Buscar datos del autor para devolver la respuesta completa de inmediato
+	usersCollection := config.GetCollection("users")
+	var author models.User
+	err = usersCollection.FindOne(ctx, bson.M{"_id": userID}).Decode(&author)
+
+	commentResponse := models.CommentResponse{
+		Comment:   comment,
+		UserName:  "Usuario Desconocido",
+		UserImage: "",
+	}
+
+	if err == nil {
+		commentResponse.UserName = author.Name
+		commentResponse.UserImage = author.ProfileImage
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Comentario publicado exitosamente",
-		"comment": comment,
+		"comment": commentResponse,
 	})
 }
 
