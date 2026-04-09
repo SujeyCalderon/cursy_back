@@ -44,7 +44,11 @@ func SendPushNotification(token, title, body string) error {
 			Title: title,
 			Body:  body,
 		},
-		// También puedes incluir Data si la app necesita procesar algo en segundo plano
+		Android: &messaging.AndroidConfig{
+			Notification: &messaging.AndroidNotification{
+				ChannelID: "cursy_notifications", // Debe coincidir con el ID en Android
+			},
+		},
 		Data: map[string]string{
 			"click_action": "FLUTTER_NOTIFICATION_CLICK", // Para compatibilidad
 		},
