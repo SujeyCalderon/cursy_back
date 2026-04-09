@@ -52,7 +52,9 @@ func SendPushNotification(token, title, body string) error {
 			},
 		},
 		Data: map[string]string{
-			"click_action": "FLUTTER_NOTIFICATION_CLICK", // Para compatibilidad
+			"title":        title,
+			"body":         body,
+			"click_action": "FLUTTER_NOTIFICATION_CLICK",
 		},
 	}
 

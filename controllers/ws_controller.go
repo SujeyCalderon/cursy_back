@@ -198,15 +198,23 @@ func (c *Client) ReadPump() {
 			receiverClient.Send <- forwardData
 		} else {
 			// Si el destinatario no está conectado al WebSocket, enviamos Push Notification
-			go func(receiverIDStr, content string) {
-				receiverID, _ := primitive.ObjectIDFromHex(receiverIDStr)
+				log.Printf("Intentando enviar Push a %s por mensaje offline", receiverIDStr)
 				usersCollection := config.GetCollection("users")
 				var receiver models.User
 				err := usersCollection.FindOne(context.Background(), bson.M{"_id": receiverID}).Decode(&receiver)
 				
-				if err == nil && receiver.FCMToken != "" {
-					services.SendPushNotification(receiver.FCMToken, "Nuevo mensaje de Cursy", content)
+				if err != nil {
+					log.Printf("Error buscando usuario para Push: %v", err)
+					return
 				}
+
+				if receiver.FCMToken == "" {
+					log.Printf("Usuario %s no tiene FCM Token registrado", receiverIDStr)
+					return
+				}
+
+				log.Printf("Enviando Push a token: %s...", receiver.FCMToken[:10])
+				services.SendPushNotification(receiver.FCMToken, "Nuevo mensaje de Cursy", content)
 			}(input.ReceiverID, input.Content)
 		}
 	}
