@@ -7,6 +7,7 @@ import (
 
 	"cursy_back/config"
 	"cursy_back/models"
+	"cursy_back/services"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -194,6 +195,30 @@ func PublishCourse(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Course published successfully! You can now access other users' courses.",
 	})
+
+	// Notificar a todos los demás usuarios sobre el nuevo curso
+	go func(authorID primitive.ObjectID, courseTitle string) {
+		usersCollection := config.GetCollection("users")
+		// Buscar todos los usuarios que tienen token y no son el autor
+		cursor, err := usersCollection.Find(context.Background(), bson.M{
+			"_id":       bson.M{"$ne": authorID},
+			"fcm_token": bson.M{"$ne": ""},
+		})
+		if err != nil {
+			return
+		}
+		defer cursor.Close(context.Background())
+
+		var users []models.User
+		if err = cursor.All(context.Background(), &users); err != nil {
+			return
+		}
+
+		notificationBody := "Se ha publicado un nuevo curso: " + courseTitle
+		for _, user := range users {
+			services.SendPushNotification(user.FCMToken, "Nuevo curso en Cursy 🎓", notificationBody)
+		}
+	}(userID, course.Title)
 }
 
 // DeleteCourse elimina un curso

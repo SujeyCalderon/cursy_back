@@ -7,6 +7,7 @@ import (
 
 	"cursy_back/config"
 	"cursy_back/models"
+	"cursy_back/services"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -87,6 +88,24 @@ func CreateComment(c *gin.Context) {
 		"message": "Comentario publicado exitosamente",
 		"comment": commentResponse,
 	})
+
+	// Notificar al autor del curso sobre el nuevo comentario
+	go func(courseAuthorID, commenterID primitive.ObjectID, courseTitle, commenterName, content string) {
+		// No notificar si el autor del curso es el mismo que comenta
+		if courseAuthorID == commenterID {
+			return
+		}
+
+		usersCollection := config.GetCollection("users")
+		var author models.User
+		err := usersCollection.FindOne(context.Background(), bson.M{"_id": courseAuthorID}).Decode(&author)
+		
+		if err == nil && author.FCMToken != "" {
+			title := "Nuevo comentario en tu curso 💬"
+			body := commenterName + " comentó en '" + courseTitle + "': " + content
+			services.SendPushNotification(author.FCMToken, title, body)
+		}
+	}(course.AuthorID, userID, course.Title, author.Name, input.Content)
 }
 
 // GetCommentsByCourse devuelve la lista de comentarios de un curso con el autor
