@@ -194,3 +194,35 @@ func DeleteAccount(c *gin.Context) {
 		"message": "Account deleted successfully",
 	})
 }
+
+// UpdateFCMToken actualiza el token de Firebase del usuario actual
+func UpdateFCMToken(c *gin.Context) {
+	userIDStr, _ := c.Get("userID")
+	userID, _ := primitive.ObjectIDFromHex(userIDStr.(string))
+
+	var input struct {
+		FCMToken string `json:"fcm_token" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "FCM Token es requerido"})
+		return
+	}
+
+	collection := config.GetCollection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := collection.UpdateOne(
+		ctx,
+		bson.M{"_id": userID},
+		bson.M{"$set": bson.M{"fcm_token": input.FCMToken, "updated_at": time.Now()}},
+	)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el token de FCM"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "FCM Token actualizado correctamente"})
+}

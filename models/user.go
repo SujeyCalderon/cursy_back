@@ -20,6 +20,7 @@ type User struct {
 	CreatedAt          time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt          time.Time          `bson:"updated_at" json:"updated_at"`
 	University         string             `bson:"university" json:"university"`
+	FCMToken           string             `bson:"fcm_token" json:"fcm_token"`
 }
 
 // UserRegisterInput representa los datos para el registro de usuario

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "444501906867",
+    "project_id": "cursy-app",
+    "storage_bucket": "cursy-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:444501906867:android:ecbbf4e56b81f84e95a7c6",
+        "android_client_info": {
+          "package_name": "com.example.cursy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIClVGRu04U-8ZwFEAfBn-WaKktxXEKk4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

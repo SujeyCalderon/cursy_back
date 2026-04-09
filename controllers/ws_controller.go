@@ -10,6 +10,7 @@ import (
 
 	"cursy_back/config"
 	"cursy_back/models"
+	"cursy_back/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -190,10 +191,24 @@ func (c *Client) ReadPump() {
 		forwardData, _ := json.Marshal(input)
 
 		MainHub.Mutex.Lock()
-		if receiverClient, ok := MainHub.Clients[input.ReceiverID]; ok {
-			receiverClient.Send <- forwardData
-		}
+		receiverClient, isOnline := MainHub.Clients[input.ReceiverID]
 		MainHub.Mutex.Unlock()
+
+		if isOnline {
+			receiverClient.Send <- forwardData
+		} else {
+			// Si el destinatario no está conectado al WebSocket, enviamos Push Notification
+			go func(receiverIDStr, content string) {
+				receiverID, _ := primitive.ObjectIDFromHex(receiverIDStr)
+				usersCollection := config.GetCollection("users")
+				var receiver models.User
+				err := usersCollection.FindOne(context.Background(), bson.M{"_id": receiverID}).Decode(&receiver)
+				
+				if err == nil && receiver.FCMToken != "" {
+					services.SendPushNotification(receiver.FCMToken, "Nuevo mensaje de Cursy", content)
+				}
+			}(input.ReceiverID, input.Content)
+		}
 	}
 }
 

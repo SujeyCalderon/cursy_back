@@ -28,6 +28,7 @@ func SetupRoutes(router *gin.Engine) {
 		{
 			authProtected.POST("/logout", controllers.Logout)
 			authProtected.DELETE("/account", controllers.DeleteAccount)
+			authProtected.POST("/fcm-token", controllers.UpdateFCMToken)
 		}
 
 		courses := api.Group("/courses")

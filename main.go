@@ -6,6 +6,7 @@ import (
 	"cursy_back/config"
 	"cursy_back/controllers"
 	"cursy_back/routes"
+	"cursy_back/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -19,13 +20,16 @@ func init() {
 }
 
 func main() {
-	// Connect to MongoDB
+	// Conexión a MongoDB
 	config.ConnectDB()
 
-	// Create Gin router
+	// Inicialización de Firebase
+	services.InitFirebase()
+
+	// Crear router de Gin
 	router := gin.Default()
 
-	// Enable CORS
+	// Habilitar CORS
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
