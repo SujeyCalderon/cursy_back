@@ -198,10 +198,18 @@ func (c *Client) ReadPump() {
 			receiverClient.Send <- forwardData
 		} else {
 			// Si el destinatario no está conectado al WebSocket, enviamos Push Notification
+			go func(receiverIDStr, content string) {
 				log.Printf("Intentando enviar Push a %s por mensaje offline", receiverIDStr)
 				usersCollection := config.GetCollection("users")
 				var receiver models.User
-				err := usersCollection.FindOne(context.Background(), bson.M{"_id": receiverID}).Decode(&receiver)
+				
+				receiverObjID, err := primitive.ObjectIDFromHex(receiverIDStr)
+				if err != nil {
+					log.Printf("Error decodificando ID de usuario: %v", err)
+					return
+				}
+
+				err = usersCollection.FindOne(context.Background(), bson.M{"_id": receiverObjID}).Decode(&receiver)
 				
 				if err != nil {
 					log.Printf("Error buscando usuario para Push: %v", err)
