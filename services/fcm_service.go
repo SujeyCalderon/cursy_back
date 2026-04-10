@@ -40,16 +40,8 @@ func SendPushNotification(token, title, body string) error {
 
 	message := &messaging.Message{
 		Token: token,
-		Notification: &messaging.Notification{
-			Title: title,
-			Body:  body,
-		},
 		Android: &messaging.AndroidConfig{
 			Priority: "high",
-			Notification: &messaging.AndroidNotification{
-				ChannelID: "cursy_notifications",
-				Priority:  messaging.PriorityHigh,
-			},
 		},
 		Data: map[string]string{
 			"title": title,
