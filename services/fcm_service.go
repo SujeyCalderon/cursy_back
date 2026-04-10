@@ -52,9 +52,8 @@ func SendPushNotification(token, title, body string) error {
 			},
 		},
 		Data: map[string]string{
-			"title":        title,
-			"body":         body,
-			"click_action": "FLUTTER_NOTIFICATION_CLICK",
+			"title": title,
+			"body":  body,
 		},
 	}
 
@@ -64,6 +63,6 @@ func SendPushNotification(token, title, body string) error {
 		return err
 	}
 
-	log.Printf("Notificación enviada con éxito: %s", response)
+	log.Printf("Notificación push enviada con éxito (%s): %s", title, response)
 	return nil
 }
