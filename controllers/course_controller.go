@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -211,9 +212,11 @@ func PublishCourse(c *gin.Context) {
 
 		var users []models.User
 		if err = cursor.All(context.Background(), &users); err != nil {
+			log.Printf("Error al decodificar usuarios para notif curso: %v", err)
 			return
 		}
 
+		log.Printf("Notificando nuevo curso '%s' a %d usuarios", courseTitle, len(users))
 		notificationBody := "Se ha publicado un nuevo curso: " + courseTitle
 		for _, user := range users {
 			services.SendPushNotification(user.FCMToken, "Nuevo curso en Cursy 🎓", notificationBody)

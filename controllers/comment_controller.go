@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -101,9 +102,14 @@ func CreateComment(c *gin.Context) {
 		err := usersCollection.FindOne(context.Background(), bson.M{"_id": courseAuthorID}).Decode(&author)
 		
 		if err == nil && author.FCMToken != "" {
+			log.Printf("Notificando comentario de %s a autor del curso %s", commenterName, author.Name)
 			title := "Nuevo comentario en tu curso 💬"
 			body := commenterName + " comentó en '" + courseTitle + "': " + content
 			services.SendPushNotification(author.FCMToken, title, body)
+		} else if err != nil {
+			log.Printf("Error buscando autor del curso para notificación: %v", err)
+		} else {
+			log.Printf("El autor del curso no tiene FCM Token registrado")
 		}
 	}(course.AuthorID, userID, course.Title, author.Name, input.Content)
 }
