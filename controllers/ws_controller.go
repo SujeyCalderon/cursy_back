@@ -149,6 +149,21 @@ func (h *Hub) broadcastStatus(userID string, status string) {
 	}
 }
 
+// Broadcast envía un mensaje a TODOS los usuarios conectados
+func (h *Hub) Broadcast(message map[string]string) {
+	h.Mutex.Lock()
+	defer h.Mutex.Unlock()
+
+	data, _ := json.Marshal(message)
+	for _, client := range h.Clients {
+		select {
+		case client.Send <- data:
+		default:
+			// Ignorar si el canal está lleno
+		}
+	}
+}
+
 func (c *Client) ReadPump() {
 	defer func() {
 		MainHub.Unregister <- c

@@ -230,6 +230,12 @@ func PublishCourse(c *gin.Context) {
 			}
 		}
 	}(userID, course.Title)
+
+	// Broadcast vía WebSocket para que el Feed se actualice en tiempo real
+	MainHub.Broadcast(map[string]string{
+		"type":    "new_course",
+		"content": "A new course has been published: " + course.Title,
+	})
 }
 
 // DeleteCourse elimina un curso

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -213,6 +214,7 @@ func UpdateFCMToken(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	log.Printf("Actualizando FCM Token para usuario %s: [%s...]", userID.Hex(), input.FCMToken[:10])
 	_, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": userID},
