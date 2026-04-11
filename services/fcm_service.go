@@ -31,11 +31,20 @@ func InitFirebase() {
 	log.Println("Firebase Admin SDK inicializado correctamente")
 }
 
-// SendPushNotification envía una notificación push a un token específico
-func SendPushNotification(token, title, body string) error {
+// SendPushNotification envía una notificación push a un token específico con datos adicionales opcionales
+func SendPushNotification(token, title, body string, data map[string]string) error {
 	if fcmClient == nil {
 		log.Println("FCM Client no inicializado")
 		return nil
+	}
+
+	// Combinar el título y cuerpo base con los datos proporcionados
+	payload := map[string]string{
+		"title": title,
+		"body":  body,
+	}
+	for k, v := range data {
+		payload[k] = v
 	}
 
 	message := &messaging.Message{
@@ -43,10 +52,7 @@ func SendPushNotification(token, title, body string) error {
 		Android: &messaging.AndroidConfig{
 			Priority: "high",
 		},
-		Data: map[string]string{
-			"title": title,
-			"body":  body,
-		},
+		Data: payload,
 	}
 
 	response, err := fcmClient.Send(context.Background(), message)

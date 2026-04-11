@@ -219,7 +219,11 @@ func PublishCourse(c *gin.Context) {
 		log.Printf("Notificando nuevo curso '%s' a %d usuarios", courseTitle, len(users))
 		notificationBody := "Se ha publicado un nuevo curso: " + courseTitle
 		for _, user := range users {
-			services.SendPushNotification(user.FCMToken, "Nuevo curso en Cursy 🎓", notificationBody)
+			data := map[string]string{
+				"type":      "new_course",
+				"target_id": courseID.Hex(),
+			}
+			services.SendPushNotification(user.FCMToken, "Nuevo curso en Cursy 🎓", notificationBody, data)
 		}
 	}(userID, course.Title)
 }

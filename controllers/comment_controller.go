@@ -105,7 +105,12 @@ func CreateComment(c *gin.Context) {
 			log.Printf("Notificando comentario de %s a autor del curso %s", commenterName, author.Name)
 			title := "Nuevo comentario en tu curso 💬"
 			body := commenterName + " comentó en '" + courseTitle + "': " + content
-			services.SendPushNotification(author.FCMToken, title, body)
+			
+			data := map[string]string{
+				"type":      "new_comment",
+				"target_id": courseID.Hex(),
+			}
+			services.SendPushNotification(author.FCMToken, title, body, data)
 		} else if err != nil {
 			log.Printf("Error buscando autor del curso para notificación: %v", err)
 		} else {
