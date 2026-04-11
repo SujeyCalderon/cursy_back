@@ -15,9 +15,13 @@ var fcmClient *messaging.Client
 // InitFirebase inicializa el SDK de Firebase Admin
 func InitFirebase() {
 	serviceAccountKeyPath, _ := filepath.Abs("firebase-service-account.json")
+	log.Printf("Intentando cargar credenciales de Firebase desde: %s", serviceAccountKeyPath)
 	opt := option.WithCredentialsFile(serviceAccountKeyPath)
 	
-	app, err := firebase.NewApp(context.Background(), nil, opt)
+	config := &firebase.Config{
+		ProjectID: "cursy-app",
+	}
+	app, err := firebase.NewApp(context.Background(), config, opt)
 	if err != nil {
 		log.Fatalf("Error inicializando Firebase App: %v", err)
 	}
