@@ -102,7 +102,7 @@ func CreateComment(c *gin.Context) {
 		err := usersCollection.FindOne(context.Background(), bson.M{"_id": courseAuthorID}).Decode(&author)
 		
 		if err == nil && author.FCMToken != "" {
-			log.Printf("Notificando comentario de %s a autor del curso %s", commenterName, author.Name)
+			log.Printf("Notificando comentario de %s a autor del curso %s (Token: %s...)", commenterName, author.Name, author.FCMToken[:10])
 			title := "Nuevo comentario en tu curso 💬"
 			body := commenterName + " comentó en '" + courseTitle + "': " + content
 			
@@ -110,11 +110,14 @@ func CreateComment(c *gin.Context) {
 				"type":      "new_comment",
 				"target_id": courseID.Hex(),
 			}
-			services.SendPushNotification(author.FCMToken, title, body, data)
+			err := services.SendPushNotification(author.FCMToken, title, body, data)
+			if err != nil {
+				log.Printf("Error enviando notificación a %s: %v", author.Name, err)
+			}
 		} else if err != nil {
-			log.Printf("Error buscando autor del curso para notificación: %v", err)
+			log.Printf("Error buscando autor del curso %s para notificación: %v", courseAuthorID.Hex(), err)
 		} else {
-			log.Printf("El autor del curso no tiene FCM Token registrado")
+			log.Printf("El autor del curso %s (%s) no tiene FCM Token registrado", courseAuthorID.Hex(), author.Name)
 		}
 	}(course.AuthorID, userID, course.Title, author.Name, input.Content)
 }

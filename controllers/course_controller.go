@@ -199,13 +199,13 @@ func PublishCourse(c *gin.Context) {
 
 	// Notificar a todos los demás usuarios sobre el nuevo curso
 	go func(authorID primitive.ObjectID, courseTitle string) {
-		usersCollection := config.GetCollection("users")
-		// Buscar todos los usuarios que tienen token y no son el autor
+		log.Printf("Buscando usuarios para notificar nuevo curso (excluyendo autor %s)...", authorID.Hex())
 		cursor, err := usersCollection.Find(context.Background(), bson.M{
 			"_id":       bson.M{"$ne": authorID},
 			"fcm_token": bson.M{"$ne": ""},
 		})
 		if err != nil {
+			log.Printf("Error buscando usuarios con FCM Token: %v", err)
 			return
 		}
 		defer cursor.Close(context.Background())
@@ -216,14 +216,18 @@ func PublishCourse(c *gin.Context) {
 			return
 		}
 
-		log.Printf("Notificando nuevo curso '%s' a %d usuarios", courseTitle, len(users))
+		log.Printf("Se encontraron %d usuarios con FCM Token para notificar", len(users))
 		notificationBody := "Se ha publicado un nuevo curso: " + courseTitle
 		for _, user := range users {
 			data := map[string]string{
 				"type":      "new_course",
 				"target_id": courseID.Hex(),
 			}
-			services.SendPushNotification(user.FCMToken, "Nuevo curso en Cursy 🎓", notificationBody, data)
+			log.Printf("Enviando notificación a usuario %s (Token: %s...)", user.Name, user.FCMToken[:10])
+			err := services.SendPushNotification(user.FCMToken, "Nuevo curso en Cursy 🎓", notificationBody, data)
+			if err != nil {
+				log.Printf("Error enviando a %s: %v", user.Name, err)
+			}
 		}
 	}(userID, course.Title)
 }
