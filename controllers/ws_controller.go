@@ -222,7 +222,11 @@ func (c *Client) ReadPump() {
 				}
 
 				log.Printf("Enviando Push a token: %s...", receiver.FCMToken[:10])
-				services.SendPushNotification(receiver.FCMToken, "Nuevo mensaje de Cursy", content)
+				data := map[string]string{
+					"type":      "chat",
+					"sender_id": input.SenderID,
+				}
+				services.SendPushNotification(receiver.FCMToken, "Nuevo mensaje de Cursy", content, data)
 			}(input.ReceiverID, input.Content)
 		}
 	}
