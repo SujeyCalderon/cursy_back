@@ -223,7 +223,11 @@ func PublishCourse(c *gin.Context) {
 				"type":      "new_course",
 				"target_id": courseID.Hex(),
 			}
-			log.Printf("Enviando notificación a usuario %s (Token: %s...)", user.Name, user.FCMToken[:10])
+			tokenDisplay := user.FCMToken
+			if len(tokenDisplay) > 10 {
+				tokenDisplay = tokenDisplay[:10] + "..."
+			}
+			log.Printf("Enviando notificación a usuario %s (Token: %s)", user.Name, tokenDisplay)
 			err := services.SendPushNotification(user.FCMToken, "Nuevo curso en Cursy 🎓", notificationBody, data)
 			if err != nil {
 				log.Printf("Error enviando a %s: %v", user.Name, err)

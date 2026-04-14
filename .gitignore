@@ -5,6 +5,8 @@
 *.so
 *.dylib
 cursy_back
+cursy_back_update
+firebase-service-account.json
 
 # Test binary
 *.test

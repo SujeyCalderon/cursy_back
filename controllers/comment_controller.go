@@ -102,7 +102,11 @@ func CreateComment(c *gin.Context) {
 		err := usersCollection.FindOne(context.Background(), bson.M{"_id": courseAuthorID}).Decode(&author)
 		
 		if err == nil && author.FCMToken != "" {
-			log.Printf("Notificando comentario de %s a autor del curso %s (Token: %s...)", commenterName, author.Name, author.FCMToken[:10])
+			tokenDisplay := author.FCMToken
+			if len(tokenDisplay) > 10 {
+				tokenDisplay = tokenDisplay[:10] + "..."
+			}
+			log.Printf("Notificando comentario de %s a autor del curso %s (Token: %s)", commenterName, author.Name, tokenDisplay)
 			title := "Nuevo comentario en tu curso 💬"
 			body := commenterName + " comentó en '" + courseTitle + "': " + content
 			

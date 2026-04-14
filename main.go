@@ -55,6 +55,7 @@ func main() {
 	router.Static("/uploads", "./uploads")
 
 	// Iniciar servidor HTTP en puerto 8080
+	log.Println("=== CURSY VERSION 2.0 STARTING ===")
 	log.Println("Server starting on port 8080...")
 	if err := router.Run(":8080"); err != nil {
 		log.Fatal("Error starting server: ", err)
