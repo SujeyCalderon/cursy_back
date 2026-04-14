@@ -95,6 +95,11 @@ func SendPushNotification(token, title, body string, data map[string]string) err
 		payload[k] = v
 	}
 
+	tokenDisplay := token
+	if len(tokenDisplay) > 10 {
+		tokenDisplay = tokenDisplay[:10] + "..."
+	}
+	log.Printf("📱 Preparando mensaje FCM para token: %s", tokenDisplay)
 	message := &messaging.Message{
 		Token: token,
 		Android: &messaging.AndroidConfig{
@@ -103,12 +108,13 @@ func SendPushNotification(token, title, body string, data map[string]string) err
 		Data: payload,
 	}
 
+	log.Printf("📡 Enviando a Firebase...")
 	response, err := fcmClient.Send(context.Background(), message)
 	if err != nil {
-		log.Printf("❌ Error enviando notificación push: %v", err)
+		log.Printf("❌ ERROR en respuesta de Firebase: %v", err)
 		return err
 	}
 
-	log.Printf("🚀 Notificación push enviada con éxito (%s): %s", title, response)
+	log.Printf("🚀 NOTIFICACIÓN ENTREGADA A FIREBASE exitosamente. ID: %s", response)
 	return nil
 }
