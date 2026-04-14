@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"cursy_back/config"
@@ -222,6 +223,12 @@ func PublishCourse(c *gin.Context) {
 		notificationBody := "Se ha publicado un nuevo curso: " + courseTitle
 		
 		for _, user := range users {
+			// ✅ FILTRAR usuarios sin token (doble verificación)
+			if strings.TrimSpace(user.FCMToken) == "" {
+				log.Printf("⚠️ Usuario %s (%s) no tiene FCM token, saltando", user.Name, user.ID.Hex())
+				continue
+			}
+
 			data := map[string]string{
 				"type":      "new_course",
 				"target_id": courseID.Hex(),

@@ -60,6 +60,7 @@ func initApp(opt option.ClientOption) {
 	log.Println("✅ Firebase Admin SDK inicializado")
 }
 
+
 // SendPushNotification - VERSIÓN CORREGIDA
 func SendPushNotification(token, title, body string, data map[string]string) error {
 	if strings.TrimSpace(token) == "" {
