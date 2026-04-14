@@ -14,44 +14,33 @@ import (
 
 var fcmClient *messaging.Client
 
-// InitFirebase inicializa el SDK de Firebase Admin con limpieza profunda de llave privada
 func InitFirebase() {
 	jsonPath := "firebase-service-account.json"
 	data, err := ioutil.ReadFile(jsonPath)
 	if err != nil {
-		log.Printf("Error leyendo credentials file: %v. Intentando con lo que haya...", err)
+		log.Printf("Error leyendo credentials file: %v", err)
 		opt := option.WithCredentialsFile(jsonPath)
 		initApp(opt)
 		return
 	}
 
-	// Limpieza ULTRA ROBUSTA de la llave privada
+	// Limpieza de llave privada
 	var creds map[string]interface{}
 	if err := json.Unmarshal(data, &creds); err == nil {
 		if pk, ok := creds["private_key"].(string); ok {
-			log.Printf("INICIANDO LIMPIEZA DE LLAVE (Len: %d)", len(pk))
-			
-			// Paso 1: Reemplazar escapes literales comunes
 			cleanPK := strings.ReplaceAll(pk, "\\n", "\n")
 			cleanPK = strings.ReplaceAll(cleanPK, "\\r", "")
-			cleanPK = strings.ReplaceAll(cleanPK, `\n`, "\n") // Fallback para otros escapes
-			
-			// Paso 2: Limpiar posibles comillas dobles escapadas o basura
 			cleanPK = strings.Trim(cleanPK, " \t\n\r\"")
 			
-			// Paso 3: Asegurar que los headers PEM sean correctos
 			if !strings.HasPrefix(cleanPK, "-----BEGIN") {
-				log.Println("ADVERTENCIA: Re-formateando llave privada (faltaba header)")
 				cleanPK = "-----BEGIN PRIVATE KEY-----\n" + cleanPK + "\n-----END PRIVATE KEY-----"
 			}
-
 			creds["private_key"] = cleanPK
 			cleanData, _ := json.Marshal(creds)
 			initApp(option.WithCredentialsJSON(cleanData))
 			return
 		}
 	}
-
 	initApp(option.WithCredentialsJSON(data))
 }
 
@@ -62,59 +51,127 @@ func initApp(opt option.ClientOption) {
 		log.Printf("ERROR: Fallo inicializar Firebase App: %v", err)
 		return
 	}
-
 	client, err := app.Messaging(context.Background())
 	if err != nil {
 		log.Printf("ERROR: Fallo obtener cliente FCM: %v", err)
 		return
 	}
-
 	fcmClient = client
-	log.Println("✅ [ULTRA ROBUSTO] Firebase Admin SDK inicializado exitosamente")
+	log.Println("✅ Firebase Admin SDK inicializado")
 }
 
-// SendPushNotification envía una notificación push a un token específico con datos adicionales opcionales
+// SendPushNotification - VERSIÓN CORREGIDA
 func SendPushNotification(token, title, body string, data map[string]string) error {
-	// Validación de token vacío para evitar errores 400 de FCM
 	if strings.TrimSpace(token) == "" {
-		log.Println("ℹ️ Ignorando envío de notificación: token vacío")
+		log.Println("ℹ️ Ignorando envío: token vacío")
 		return nil
 	}
-
 	if fcmClient == nil {
 		log.Println("⚠️ FCM Client no inicializado")
 		return nil
 	}
 
-	// Combinar el título y cuerpo base con los datos proporcionados
-	payload := map[string]string{
-		"title": title,
-		"body":  body,
+	// Preparar data payload
+	payload := make(map[string]string)
+	if data != nil {
+		for k, v := range data {
+			payload[k] = v
+		}
 	}
-	for k, v := range data {
-		payload[k] = v
-	}
+	// Agregar metadata útil
+	payload["click_action"] = "FLUTTER_NOTIFICATION_CLICK" // o tu propia acción
+	payload["type"] = "new_course"
 
 	tokenDisplay := token
 	if len(tokenDisplay) > 10 {
 		tokenDisplay = tokenDisplay[:10] + "..."
 	}
-	log.Printf("📱 Preparando mensaje FCM para token: %s", tokenDisplay)
+	log.Printf("📱 Enviando a: %s", tokenDisplay)
+
 	message := &messaging.Message{
 		Token: token,
+		// ✅ ESTO ES CLAVE: Notificación para background
+		Notification: &messaging.Notification{
+			Title: title,
+			Body:  body,
+		},
+		// Datos para cuando la app está en foreground
+		Data: payload,
 		Android: &messaging.AndroidConfig{
 			Priority: "high",
+			Notification: &messaging.AndroidNotification{
+				ChannelID: "new_courses_channel", // Debe coincidir con tu canal en Android
+				Sound:     "default",
+				// Para abrir app al tocar
+				ClickAction: "OPEN_COURSE_DETAIL",
+			},
 		},
-		Data: payload,
+		// Opcional: para iOS
+		APNS: &messaging.APNSConfig{
+			Payload: &messaging.APNSPayload{
+				Aps: &messaging.Aps{
+					Sound: "default",
+				},
+			},
+		},
 	}
 
-	log.Printf("📡 Enviando a Firebase...")
 	response, err := fcmClient.Send(context.Background(), message)
 	if err != nil {
-		log.Printf("❌ ERROR en respuesta de Firebase: %v", err)
+		log.Printf("❌ ERROR FCM: %v", err)
 		return err
 	}
-
-	log.Printf("🚀 NOTIFICACIÓN ENTREGADA A FIREBASE exitosamente. ID: %s", response)
+	log.Printf("🚀 Notificación enviada. ID: %s", response)
 	return nil
+}
+
+// SendMulticastNotification - Para enviar a múltiples tokens
+func SendMulticastNotification(tokens []string, title, body string, data map[string]string) (*messaging.BatchResponse, error) {
+	if fcmClient == nil {
+		return nil, nil
+	}
+
+	// Filtrar tokens vacíos
+	validTokens := make([]string, 0)
+	for _, t := range tokens {
+		if strings.TrimSpace(t) != "" {
+			validTokens = append(validTokens, t)
+		}
+	}
+	if len(validTokens) == 0 {
+		return nil, nil
+	}
+
+	payload := make(map[string]string)
+	if data != nil {
+		for k, v := range data {
+			payload[k] = v
+		}
+	}
+	payload["type"] = "new_course"
+
+	message := &messaging.MulticastMessage{
+		Tokens: validTokens,
+		Notification: &messaging.Notification{
+			Title: title,
+			Body:  body,
+		},
+		Data: payload,
+		Android: &messaging.AndroidConfig{
+			Priority: "high",
+			Notification: &messaging.AndroidNotification{
+				ChannelID: "new_courses_channel",
+				Sound:     "default",
+			},
+		},
+	}
+
+	response, err := fcmClient.SendMulticast(context.Background(), message)
+	if err != nil {
+		log.Printf("❌ ERROR multicast: %v", err)
+		return nil, err
+	}
+
+	log.Printf("🚀 Multicast: %d exitosos, %d fallidos", response.SuccessCount, response.FailureCount)
+	return response, nil
 }
