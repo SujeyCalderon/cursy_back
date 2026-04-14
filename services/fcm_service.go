@@ -34,13 +34,15 @@ func InitFirebase() {
 			// Paso 1: Reemplazar escapes literales comunes
 			cleanPK := strings.ReplaceAll(pk, "\\n", "\n")
 			cleanPK = strings.ReplaceAll(cleanPK, "\\r", "")
+			cleanPK = strings.ReplaceAll(cleanPK, `\n`, "\n") // Fallback para otros escapes
 			
 			// Paso 2: Limpiar posibles comillas dobles escapadas o basura
 			cleanPK = strings.Trim(cleanPK, " \t\n\r\"")
 			
-			// Paso 3: Si la llave no tiene los headers, algo anda muy mal
-			if !strings.Contains(cleanPK, "BEGIN PRIVATE KEY") {
-				log.Println("ADVERTENCIA: La llave no parece tener el formato PEM correcto")
+			// Paso 3: Asegurar que los headers PEM sean correctos
+			if !strings.HasPrefix(cleanPK, "-----BEGIN") {
+				log.Println("ADVERTENCIA: Re-formateando llave privada (faltaba header)")
+				cleanPK = "-----BEGIN PRIVATE KEY-----\n" + cleanPK + "\n-----END PRIVATE KEY-----"
 			}
 
 			creds["private_key"] = cleanPK
@@ -57,12 +59,14 @@ func initApp(opt option.ClientOption) {
 	config := &firebase.Config{ProjectID: "cursy-app"}
 	app, err := firebase.NewApp(context.Background(), config, opt)
 	if err != nil {
-		log.Fatalf("CRÍTICO: Fallo al inicializar Firebase App: %v", err)
+		log.Printf("ERROR: Fallo inicializar Firebase App: %v", err)
+		return
 	}
 
 	client, err := app.Messaging(context.Background())
 	if err != nil {
-		log.Fatalf("CRÍTICO: Fallo al obtener cliente FCM: %v", err)
+		log.Printf("ERROR: Fallo obtener cliente FCM: %v", err)
+		return
 	}
 
 	fcmClient = client
@@ -71,8 +75,14 @@ func initApp(opt option.ClientOption) {
 
 // SendPushNotification envía una notificación push a un token específico con datos adicionales opcionales
 func SendPushNotification(token, title, body string, data map[string]string) error {
+	// Validación de token vacío para evitar errores 400 de FCM
+	if strings.TrimSpace(token) == "" {
+		log.Println("ℹ️ Ignorando envío de notificación: token vacío")
+		return nil
+	}
+
 	if fcmClient == nil {
-		log.Println("FCM Client no inicializado")
+		log.Println("⚠️ FCM Client no inicializado")
 		return nil
 	}
 
@@ -95,10 +105,10 @@ func SendPushNotification(token, title, body string, data map[string]string) err
 
 	response, err := fcmClient.Send(context.Background(), message)
 	if err != nil {
-		log.Printf("Error enviando notificación push: %v", err)
+		log.Printf("❌ Error enviando notificación push: %v", err)
 		return err
 	}
 
-	log.Printf("Notificación push enviada con éxito (%s): %s", title, response)
+	log.Printf("🚀 Notificación push enviada con éxito (%s): %s", title, response)
 	return nil
 }
