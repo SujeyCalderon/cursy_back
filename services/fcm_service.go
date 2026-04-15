@@ -90,32 +90,38 @@ func SendPushNotification(token, title, body string, data map[string]string) err
 	log.Printf("📱 Enviando a: %s", tokenDisplay)
 
 	message := &messaging.Message{
-		Token: token,
-		// ✅ ESTO ES CLAVE: Notificación para background
-		Notification: &messaging.Notification{
-			Title: title,
-			Body:  body,
+	Token: token,
+	// ✅ NOTIFICACIÓN: Se muestra automáticamente en background
+	Notification: &messaging.Notification{
+		Title: title,
+		Body:  body,
+	},
+	// ✅ DATA: Se envía a la app en foreground
+	Data: payload,
+	Android: &messaging.AndroidConfig{
+		Priority: "high",
+		Notification: &messaging.AndroidNotification{
+			ChannelID:   "new_courses_channel",
+			Sound:       "default",
+			Icon:        "ic_notification", // ✅ AGREGAR: ícono en barra de notificación
+			Color:       "#FF6B6B",           // ✅ AGREGAR: color del ícono
+			ClickAction: "OPEN_COURSE_DETAIL",
+			// ✅ IMPORTANTE: Mostrar siempre
+			Visibility:  messaging.VisibilityPublic,
 		},
-		// Datos para cuando la app está en foreground
-		Data: payload,
-		Android: &messaging.AndroidConfig{
-			Priority: "high",
-			Notification: &messaging.AndroidNotification{
-				ChannelID: "new_courses_channel", // Debe coincidir con tu canal en Android
-				Sound:     "default",
-				// Para abrir app al tocar
-				ClickAction: "OPEN_COURSE_DETAIL",
-			},
-		},
-		// Opcional: para iOS
-		APNS: &messaging.APNSConfig{
-			Payload: &messaging.APNSPayload{
-				Aps: &messaging.Aps{
-					Sound: "default",
+	},
+	APNS: &messaging.APNSConfig{
+		Payload: &messaging.APNSPayload{
+			Aps: &messaging.Aps{
+				Sound: "default",
+				Alert: &messaging.ApsAlert{
+					Title: title,
+					Body:  body,
 				},
 			},
 		},
-	}
+	},
+}
 
 	response, err := fcmClient.Send(context.Background(), message)
 	if err != nil {

@@ -199,51 +199,66 @@ func PublishCourse(c *gin.Context) {
 	})
 
 	// Notificar a todos los demás usuarios sobre el nuevo curso
-	go func(authorID primitive.ObjectID, courseTitle string) {
-		log.Printf("📢 INICIANDO PROCESO DE NOTIFICACIÓN: Nuevo curso '%s'", courseTitle)
-		log.Printf("🔍 Buscando usuarios para notificar (excluyendo autor %s)...", authorID.Hex())
+	// Notificar a todos los demás usuarios sobre el nuevo curso
+go func(authorID primitive.ObjectID, courseTitle string, courseID primitive.ObjectID) {
+	log.Printf("📢 INICIANDO PROCESO DE NOTIFICACIÓN: Nuevo curso '%s'", courseTitle)
+	log.Printf("🔍 Buscando usuarios para notificar (excluyendo autor %s)...", authorID.Hex())
+	
+	// ✅ OBTENER NOMBRE DEL AUTOR PRIMERO
+	var author models.User
+	err := usersCollection.FindOne(context.Background(), bson.M{"_id": authorID}).Decode(&author)
+	authorName := "Alguien"
+	if err == nil && author.Name != "" {
+		authorName = author.Name
+	}
+	
+	cursor, err := usersCollection.Find(context.Background(), bson.M{
+		"_id":       bson.M{"$ne": authorID},
+		"fcm_token": bson.M{"$ne": ""},
+	})
+	if err != nil {
+		log.Printf("❌ ERROR buscando usuarios con FCM Token: %v", err)
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	var users []models.User
+	if err = cursor.All(context.Background(), &users); err != nil {
+		log.Printf("❌ ERROR al decodificar usuarios para notificación: %v", err)
+		return
+	}
+
+	log.Printf("🎯 Se encontraron %d usuarios con FCM Token registrados para notificar", len(users))
+	
+	// ✅ TÍTULO CON NOMBRE DE USUARIO
+	notificationTitle := authorName + " subió un nuevo curso"
+	notificationBody := courseTitle
+	
+	for _, user := range users {
+		// ✅ FILTRAR usuarios sin token
+		if strings.TrimSpace(user.FCMToken) == "" {
+			log.Printf("⚠️ Usuario %s (%s) no tiene FCM token, saltando", user.Name, user.ID.Hex())
+			continue
+		}
+
+		// ✅ DATA CORREGIDA: usar "course_id" en lugar de "target_id"
+		data := map[string]string{
+			"type":       "new_course",
+			"course_id":  courseID.Hex(),  // ✅ CAMBIO: course_id, no target_id
+			"title":      notificationTitle, // ✅ AGREGAR: título para data payload
+			"body":       notificationBody,  // ✅ AGREGAR: body para data payload
+		}
 		
-		cursor, err := usersCollection.Find(context.Background(), bson.M{
-			"_id":       bson.M{"$ne": authorID},
-			"fcm_token": bson.M{"$ne": ""},
-		})
+		log.Printf("📤 Intentando enviar notificación a: %s (ID: %s)", user.Name, user.ID.Hex())
+		err := services.SendPushNotification(user.FCMToken, notificationTitle, notificationBody, data)
 		if err != nil {
-			log.Printf("❌ ERROR buscando usuarios con FCM Token: %v", err)
-			return
+			log.Printf("❌ ERROR al enviar notificación a %s: %v", user.Name, err)
+		} else {
+			log.Printf("✅ Notificación enviada exitosamente a %s", user.Name)
 		}
-		defer cursor.Close(context.Background())
-
-		var users []models.User
-		if err = cursor.All(context.Background(), &users); err != nil {
-			log.Printf("❌ ERROR al decodificar usuarios para notificación: %v", err)
-			return
-		}
-
-		log.Printf("🎯 Se encontraron %d usuarios con FCM Token registrados para notificar", len(users))
-		notificationBody := "Se ha publicado un nuevo curso: " + courseTitle
-		
-		for _, user := range users {
-			// ✅ FILTRAR usuarios sin token (doble verificación)
-			if strings.TrimSpace(user.FCMToken) == "" {
-				log.Printf("⚠️ Usuario %s (%s) no tiene FCM token, saltando", user.Name, user.ID.Hex())
-				continue
-			}
-
-			data := map[string]string{
-				"type":      "new_course",
-				"target_id": courseID.Hex(),
-			}
-			
-			log.Printf("📤 Intentando enviar notificación a: %s (ID: %s)", user.Name, user.ID.Hex())
-			err := services.SendPushNotification(user.FCMToken, "Nuevo curso en Cursy 🎓", notificationBody, data)
-			if err != nil {
-				log.Printf("❌ ERROR al enviar notificación a %s: %v", user.Name, err)
-			} else {
-				log.Printf("✅ Notificación enviada exitosamente a %s", user.Name)
-			}
-		}
-		log.Printf("🏁 PROCESO DE NOTIFICACIÓN FINALIZADO para '%s'", courseTitle)
-	}(userID, course.Title)
+	}
+	log.Printf("🏁 PROCESO DE NOTIFICACIÓN FINALIZADO para '%s'", courseTitle)
+}(userID, course.Title, course.ID) // ✅ PASAR courseID como parámetro
 
 	// Broadcast vía WebSocket para que el Feed se actualice en tiempo real
 	log.Printf("🌐 Realizando Broadcast vía WebSocket para actualizar Feeds...")
