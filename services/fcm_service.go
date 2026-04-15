@@ -63,73 +63,58 @@ func initApp(opt option.ClientOption) {
 
 // SendPushNotification - VERSIÓN CORREGIDA
 func SendPushNotification(token, title, body string, data map[string]string) error {
-	if strings.TrimSpace(token) == "" {
-		log.Println("ℹ️ Ignorando envío: token vacío")
-		return nil
-	}
-	if fcmClient == nil {
-		log.Println("⚠️ FCM Client no inicializado")
-		return nil
-	}
+    if strings.TrimSpace(token) == "" {
+        log.Println("ℹ️ Ignorando envío: token vacío")
+        return nil
+    }
+    if fcmClient == nil {
+        log.Println("⚠️ FCM Client no inicializado")
+        return nil
+    }
 
-	// Preparar data payload
-	payload := make(map[string]string)
-	if data != nil {
-		for k, v := range data {
-			payload[k] = v
-		}
-	}
-	// Agregar metadata útil
-	payload["click_action"] = "FLUTTER_NOTIFICATION_CLICK" // o tu propia acción
-	payload["type"] = "new_course"
+    courseID := ""
+    if data != nil {
+        courseID = data["course_id"]
+    }
 
-	tokenDisplay := token
-	if len(tokenDisplay) > 10 {
-		tokenDisplay = tokenDisplay[:10] + "..."
-	}
-	log.Printf("📱 Enviando a: %s", tokenDisplay)
+    // ✅ SOLO DATA PAYLOAD — garantiza que onMessageReceived siempre se llame
+    message := &messaging.Message{
+        Token: token,
+        Data: map[string]string{
+            "title":     title,
+            "body":      body,
+            "type":      "new_course",
+            "course_id": courseID,
+        },
+        Android: &messaging.AndroidConfig{
+            Priority: "high",
+            // Sin AndroidNotification — el cliente la construye
+        },
+        APNS: &messaging.APNSConfig{
+            Headers: map[string]string{
+                "apns-priority": "10",
+            },
+            Payload: &messaging.APNSPayload{
+                Aps: &messaging.Aps{
+                    ContentAvailable: true,
+                    MutableContent:   true,
+                    Sound:            "default",
+                    Alert: &messaging.ApsAlert{
+                        Title: title,
+                        Body:  body,
+                    },
+                },
+            },
+        },
+    }
 
-	message := &messaging.Message{
-	Token: token,
-	// ✅ NOTIFICACIÓN: Se muestra automáticamente en background
-	Notification: &messaging.Notification{
-		Title: title,
-		Body:  body,
-	},
-	// ✅ DATA: Se envía a la app en foreground
-	Data: payload,
-	Android: &messaging.AndroidConfig{
-		Priority: "high",
-		Notification: &messaging.AndroidNotification{
-			ChannelID:   "new_courses_channel",
-			Sound:       "default",
-			Icon:        "ic_notification", // ✅ AGREGAR: ícono en barra de notificación
-			Color:       "#FF6B6B",           // ✅ AGREGAR: color del ícono
-			ClickAction: "OPEN_COURSE_DETAIL",
-			// ✅ IMPORTANTE: Mostrar siempre
-			Visibility:  messaging.VisibilityPublic,
-		},
-	},
-	APNS: &messaging.APNSConfig{
-		Payload: &messaging.APNSPayload{
-			Aps: &messaging.Aps{
-				Sound: "default",
-				Alert: &messaging.ApsAlert{
-					Title: title,
-					Body:  body,
-				},
-			},
-		},
-	},
-}
-
-	response, err := fcmClient.Send(context.Background(), message)
-	if err != nil {
-		log.Printf("❌ ERROR FCM: %v", err)
-		return err
-	}
-	log.Printf("🚀 Notificación enviada. ID: %s", response)
-	return nil
+    response, err := fcmClient.Send(context.Background(), message)
+    if err != nil {
+        log.Printf("❌ ERROR FCM: %v", err)
+        return err
+    }
+    log.Printf("🚀 Notificación enviada. ID: %s", response)
+    return nil
 }
 
 // SendMulticastNotification - Para enviar a múltiples tokens
