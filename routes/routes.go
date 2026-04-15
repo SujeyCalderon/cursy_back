@@ -51,6 +51,7 @@ func SetupRoutes(router *gin.Engine) {
 			// Rutas para Comentarios
 			courses.GET("/:id/comments", controllers.GetCommentsByCourse)
 			courses.POST("/:id/comments", controllers.CreateComment)
+			courses.DELETE("/:id/comments/:commentId", controllers.DeleteComment)
 		}
 
 		profile := api.Group("/profile")

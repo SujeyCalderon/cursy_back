@@ -169,3 +169,54 @@ func GetCommentsByCourse(c *gin.Context) {
 		"count":    len(commentsWithAuthors),
 	})
 }
+
+// DeleteComment permite al autor de un comentario eliminarlo
+func DeleteComment(c *gin.Context) {
+	// Obtener el ID del comentario desde la URL
+	commentIDStr := c.Param("commentId")
+	commentID, err := primitive.ObjectIDFromHex(commentIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID de comentario inválido"})
+		return
+	}
+
+	// Obtener el usuario autenticado desde el token JWT
+	userIDStr, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado"})
+		return
+	}
+	userID, err := primitive.ObjectIDFromHex(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID de usuario inválido en el token"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	commentsCollection := config.GetCollection("comments")
+
+	// Buscar el comentario para verificar que pertenece al usuario
+	var comment models.Comment
+	err = commentsCollection.FindOne(ctx, bson.M{"_id": commentID}).Decode(&comment)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Comentario no encontrado"})
+		return
+	}
+
+	// Solo el autor del comentario puede eliminarlo
+	if comment.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No tienes permiso para eliminar este comentario"})
+		return
+	}
+
+	// Eliminar el comentario
+	_, err = commentsCollection.DeleteOne(ctx, bson.M{"_id": commentID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al eliminar el comentario"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Comentario eliminado exitosamente"})
+}
