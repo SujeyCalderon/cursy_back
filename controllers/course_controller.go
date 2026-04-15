@@ -249,7 +249,7 @@ go func(authorID primitive.ObjectID, courseTitle string, courseID primitive.Obje
 			"body":       notificationBody,  // ✅ AGREGAR: body para data payload
 		}
 		
-		log.Printf("📤 Intentando enviar notificación a: %s (ID: %s)", user.Name, user.ID.Hex())
+		log.Printf("Mira ese wey📤 Intentando enviar notificación a: %s (ID: %s)", user.Name, user.ID.Hex())
 		err := services.SendPushNotification(user.FCMToken, notificationTitle, notificationBody, data)
 		if err != nil {
 			log.Printf("❌ ERROR al enviar notificación a %s: %v", user.Name, err)
