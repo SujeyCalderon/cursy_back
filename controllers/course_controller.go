@@ -262,9 +262,14 @@ go func(authorID primitive.ObjectID, courseTitle string, courseID primitive.Obje
 
 	// Broadcast vía WebSocket para que el Feed se actualice en tiempo real
 	log.Printf("🌐 Realizando Broadcast vía WebSocket para actualizar Feeds...")
+	var author models.User
+	usersCollection.FindOne(ctx, bson.M{"_id": userID}).Decode(&author)
+
 	MainHub.Broadcast(map[string]string{
-		"type":    "new_course",
-		"content": "A new course has been published: " + course.Title,
+		"type":      "new_course",
+		"content":   course.Title,
+		"author_id":   userID.Hex(),    // ← para filtrar en el cliente
+		"author_name": author.Name,     // ← nombre real del autor
 	})
 }
 
