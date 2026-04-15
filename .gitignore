@@ -46,3 +46,8 @@ temp/
 
 # Kotlin config file (has test credentials)
 kotlin_api_config.kt
+
+main
+*.exe
+*.out
+*.bin
