@@ -2,13 +2,13 @@ package controllers
 
 import (
 	"context"
-	"log"
+	//"log"
 	"net/http"
 	"time"
 
 	"cursy_back/config"
 	"cursy_back/models"
-	"cursy_back/services"
+	//"cursy_back/services"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -91,39 +91,23 @@ func CreateComment(c *gin.Context) {
 	})
 
 	// Notificar al autor del curso sobre el nuevo comentario
-	go func(courseAuthorID, commenterID primitive.ObjectID, courseTitle, commenterName, content string) {
-		// No notificar si el autor del curso es el mismo que comenta
-		if courseAuthorID == commenterID {
-			return
-		}
-
-		usersCollection := config.GetCollection("users")
-		var author models.User
-		err := usersCollection.FindOne(context.Background(), bson.M{"_id": courseAuthorID}).Decode(&author)
-		
-		if err == nil && author.FCMToken != "" {
-			tokenDisplay := author.FCMToken
-			if len(tokenDisplay) > 10 {
-				tokenDisplay = tokenDisplay[:10] + "..."
-			}
-			log.Printf("Notificando comentario de %s a autor del curso %s (Token: %s)", commenterName, author.Name, tokenDisplay)
-			title := "Nuevo comentario en tu curso 💬"
-			body := commenterName + " comentó en '" + courseTitle + "': " + content
-			
-			data := map[string]string{
-				"type":      "new_comment",
-				"target_id": courseID.Hex(),
-			}
-			err := services.SendPushNotification(author.FCMToken, title, body, data)
-			if err != nil {
-				log.Printf("Error enviando notificación a %s: %v", author.Name, err)
-			}
-		} else if err != nil {
-			log.Printf("Error buscando autor del curso %s para notificación: %v", courseAuthorID.Hex(), err)
-		} else {
-			log.Printf("El autor del curso %s (%s) no tiene FCM Token registrado", courseAuthorID.Hex(), author.Name)
-		}
-	}(course.AuthorID, userID, course.Title, author.Name, input.Content)
+	// Notificar al autor del curso sobre el nuevo comentario
+go func(courseAuthorID, commenterID primitive.ObjectID, courseTitle, commenterName, content string, courseID primitive.ObjectID) {
+    // No notificar si el autor del curso es el mismo que comenta
+    if courseAuthorID == commenterID {
+        return
+    }
+	
+    // Broadcast vía WebSocket al autor del curso
+    MainHub.Broadcast(map[string]string{
+        "type":        "new_comment",
+        "course_id":   courseID.Hex(),
+        "course_title": courseTitle,
+        "commenter_name": commenterName,
+        "content":     content,
+        "target_user": courseAuthorID.Hex(), // ← solo le interesa al autor
+    })
+}(course.AuthorID, userID, course.Title, author.Name, input.Content, courseID)
 }
 
 // GetCommentsByCourse devuelve la lista de comentarios de un curso con el autor
