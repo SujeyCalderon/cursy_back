@@ -254,7 +254,7 @@ go func(authorID primitive.ObjectID, courseTitle string, courseID primitive.Obje
 		if err != nil {
 			log.Printf("❌ ERROR al enviar notificación a %s: %v", user.Name, err)
 		} else {
-			log.Printf("✅ Notificación enviada exitosamente a %s", user.Name)
+			log.Printf("💻✅ Notificación enviada exitosamente a %s", user.Name)
 		}
 	}
 	log.Printf("🏁 PROCESO DE NOTIFICACIÓN FINALIZADO para '%s'", courseTitle)
